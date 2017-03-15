@@ -1,14 +1,13 @@
 lua-openssl toolkit - A free, MIT-licensed OpenSSL binding for Lua.
 
-[![Build Status](https://travis-ci.org/zhaozg/lua-openssl.svg)](https://travis-ci.org/zhaozg/lua-openssl)
-[![Build status](https://ci.appveyor.com/api/projects/status/f8xchhlj035yqq88/branch/master?svg=true)](https://ci.appveyor.com/project/zhaozg/lua-openssl/branch/master)
+[![Build Status](https://travis-ci.org/luvitred/lua-openssl.svg)](https://travis-ci.org/luvitred/lua-openssl)
 
 # Index
 
 1. [Introduction](#introduction)
 2. [Documentation](#documentation)
 2. [Howto](#howto)
-3. [Examples](#example-usage) 
+3. [Examples](#example-usage)
 
 # Introduction
 
@@ -16,7 +15,7 @@ I needed a full OpenSSL binding for Lua, after googled, I couldn't find a versio
 I found the PHP openssl binding is a good implementation, and it inspired me.
 So I decided to write this OpenSSL toolkit for Lua.
 
-The goal is to fully support the listed items. Below you can find the development progress of lua-openssl: 
+The goal is to fully support the listed items. Below you can find the development progress of lua-openssl:
 
 * Symmetrical encrypt/decrypt. (Finished)
 * Message digest. (Finished)
@@ -101,26 +100,26 @@ below.
 
 bn library:
 ```
- __add(x,y)        compare(x,y)          pow(x,y) 
- __div(x,y)        div(x,y)              powmod(x,y,m) 
- __eq(x,y)         divmod(x,y)           random(bits) 
- __lt(x,y)         gcd(x,y)              rmod(x,y) 
- __mod(x,y)        invmod(x)             sqr(x) 
- __mul(x,y)        isneg(x)              sqrmod(x) 
- __pow(x,y)        isodd(x)              sqrtmod(x) 
- __sub(x,y)        isone(x)              sub(x,y) 
- __tostring(x)     isprime(x,[checks])   submod(x,y,m) 
- __unm(x)          iszero(x)             text(t) 
- abs(x)            mod(x,y)              tohex(x) 
- add(x,y)          mul(x,y)              tonumber(x) 
- addmod(x,y,m)     mulmod(x,y,m)         tostring(x) 
- aprime(bits)      neg(x)                totext(x) 
- bits(x)           number(x)             version 
+ __add(x,y)        compare(x,y)          pow(x,y)
+ __div(x,y)        div(x,y)              powmod(x,y,m)
+ __eq(x,y)         divmod(x,y)           random(bits)
+ __lt(x,y)         gcd(x,y)              rmod(x,y)
+ __mod(x,y)        invmod(x)             sqr(x)
+ __mul(x,y)        isneg(x)              sqrmod(x)
+ __pow(x,y)        isodd(x)              sqrtmod(x)
+ __sub(x,y)        isone(x)              sub(x,y)
+ __tostring(x)     isprime(x,[checks])   submod(x,y,m)
+ __unm(x)          iszero(x)             text(t)
+ abs(x)            mod(x,y)              tohex(x)
+ add(x,y)          mul(x,y)              tonumber(x)
+ addmod(x,y,m)     mulmod(x,y,m)         tostring(x)
+ aprime(bits)      neg(x)                totext(x)
+ bits(x)           number(x)             version
 ```
 
 ## Version
 
-This lua-openssl toolkit works with Lua 5.1/5.2 or LuaJIT 2.0/2.1, and OpenSSL (0.9.8 or above 1.0.0). 
+This lua-openssl toolkit works with Lua 5.1/5.2 or LuaJIT 2.0/2.1, and OpenSSL (0.9.8 or above 1.0.0).
 It is recommended to use the most up-to-date OpenSSL version because of the recent security fixes.
 
 If you want to get the lua-openssl and OpenSSL versions from a Lua script, here is how:
@@ -131,7 +130,7 @@ lua_openssl_version, lua_version, openssl_version = openssl.version()
 ```
 ## Style
 
-Source code of lua-openssl tidy with [astyle](http://astyle.sourceforge.net/) `--style=allman --indent=spaces=2` 
+Source code of lua-openssl tidy with [astyle](http://astyle.sourceforge.net/) `--style=allman --indent=spaces=2`
 
 ## Bugs
 
@@ -168,24 +167,24 @@ Works with Lua5.1 (should support Lua5.2 by updating the config.win file).
 	make clean
 
 ### Howto 4: Install using luarocks.
-	
+
 	luarocks install openssl --server=https://rocks.moonscript.org/dev
 
 ### Howto 5: Handle fail or error
 
-  Most lua-openssl function or methods return nil or false when error or 
-failed, followed by string type error _reason_ and number type error _code_, 
+  Most lua-openssl function or methods return nil or false when error or
+failed, followed by string type error _reason_ and number type error _code_,
 _code_ can pass to openssl.error() to get more error information.
 
   All SSL object IO operation methods return nil or false when fail or error.
-When nil returned, it followed by 'ssl' or 'syscall', means SSL layer or 
+When nil returned, it followed by 'ssl' or 'syscall', means SSL layer or
 system layer error. When false returned, it is followed by number 0, 'want_read',
 'want_write','want_x509_lookup','want_connect','want_accept'. Number 0 means
 SSL connection closed, other numbers means you should do some SSL operation.
 
-  Please remember that when lua-openssl function or methods fail without an 
-error code, you can get the last error by openssl.error(), and repeat call 
-openssl.error() will walk through error stacks of current threads. 
+  Please remember that when lua-openssl function or methods fail without an
+error code, you can get the last error by openssl.error(), and repeat call
+openssl.error() will walk through error stacks of current threads.
 openssl.error(true) will also clear error stacks after get last error code,
 this is very useful to free memory when lua-openssl repeat calls or run long times.
 
