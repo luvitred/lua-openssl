@@ -981,6 +981,16 @@ static int openssl_ssl_ctx_set_cert_verify(lua_State*L)
   return 0;
 }
 
+static int openssl_ssl_ctx_set_ecdh_auto(lua_State *L)
+{
+#if OPENSSL_VERSION_NUMBER >= 0x10002000L && OPENSSL_VERSION_NUMBER < 0x10100000L
+  SSL_CTX* ctx = CHECK_OBJECT(1, SSL_CTX, "openssl.ssl_ctx");
+  int on_off = lua_toboolean(L, 2);
+  SSL_CTX_set_ecdh_auto(ctx, on_off);
+#endif
+  return 0;
+}
+
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
 static DH *tmp_dh_callback(SSL *ssl, int is_export, int keylength)
 {
@@ -1678,6 +1688,7 @@ static luaL_Reg ssl_ctx_funcs[] =
   {"set_cert_verify", openssl_ssl_ctx_set_cert_verify},
 
   {"verify_depth",    openssl_ssl_ctx_verify_depth},
+  {"set_ecdh_auto",   openssl_ssl_ctx_set_ecdh_auto},
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
   {"set_tmp",         openssl_ssl_ctx_set_tmp},
 #endif
