@@ -6,6 +6,7 @@ A TSA can be part of a PKI deployment and its role is to provide long term proof
 @usage
   ts = require'openssl'.ts
 */
+#if !defined(LUA_OPENSSL_TINY)
 #include "openssl.h"
 #include "private.h"
 #include <stdint.h>
@@ -1852,3 +1853,5 @@ int luaopen_ts(lua_State *L)
 #endif
   return 1;
 }
+
+#endif /* LUA_OPENSSL_TINY */
