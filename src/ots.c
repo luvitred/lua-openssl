@@ -4,6 +4,7 @@
 *
 * Author:  george zhao <zhaozg(at)gmail.com>
 \*=========================================================================*/
+#if !defined(LUA_OPENSSL_TINY)
 #include "openssl.h"
 #include "private.h"
 #include <stdint.h>
@@ -1165,3 +1166,4 @@ int luaopen_ts(lua_State *L)
 #endif
   return 1;
 }
+#endif

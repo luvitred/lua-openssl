@@ -1,7 +1,8 @@
+
 #include "openssl.h"
 #include "private.h"
 
-#if (OPENSSL_VERSION_NUMBER >= 0x10101007L) && !defined(OPENSSL_NO_SM2)
+#if (OPENSSL_VERSION_NUMBER >= 0x10101007L) && !defined(OPENSSL_NO_SM2) && !defined(LUA_OPENSSL_TINY)
 
 #  include <openssl/sm2.h>
 

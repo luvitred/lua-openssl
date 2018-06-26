@@ -4,6 +4,7 @@
 *
 * Author:  george zhao <zhaozg(at)gmail.com>
 \*=========================================================================*/
+#if !defined(LUA_OPENSSL_TINY)
 #include "openssl.h"
 #include "private.h"
 #include "openssl/ocsp.h"
@@ -524,3 +525,4 @@ int luaopen_ocsp(lua_State *L)
 
   return 1;
 }
+#endif

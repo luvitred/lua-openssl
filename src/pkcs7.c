@@ -4,7 +4,7 @@
 *
 * Author:  george zhao <zhaozg(at)gmail.com>
 \*=========================================================================*/
-
+#if !defined(LUA_OPENSSL_TINY)
 #include "openssl.h"
 #include "private.h"
 
@@ -1405,3 +1405,4 @@ int luaopen_pkcs7(lua_State *L)
   auxiliar_enumerate(L, -1, pkcs7_const);
   return 1;
 }
+#endif

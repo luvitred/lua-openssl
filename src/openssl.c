@@ -266,7 +266,7 @@ static int openssl_fips_mode(lua_State *L)
   ret = FIPS_mode_set(on);
   if(ret)
     lua_pushboolean(L, ret);
-  else 
+  else
     ret = openssl_pushresult(L, ret);
   return ret;
 }
@@ -314,7 +314,7 @@ void CRYPTO_thread_cleanup(void);
 #endif
 
 static int luaclose_openssl(lua_State *L)
-{ 
+{
   FIPS_mode_set(0);
 #if defined(OPENSSL_THREADS)
   CRYPTO_thread_cleanup();
@@ -398,7 +398,6 @@ LUALIB_API int luaopen_openssl(lua_State*L)
   luaopen_asn1(L);
   lua_setfield(L, -2, "asn1");
 
-
   luaopen_digest(L);
   lua_setfield(L, -2, "digest");
 
@@ -411,14 +410,14 @@ LUALIB_API int luaopen_openssl(lua_State*L)
   luaopen_pkey(L);
   lua_setfield(L, -2, "pkey");
 
-#ifdef EVP_PKEY_EC
+#if defined(EVP_PKEY_EC)
   luaopen_ec(L);
   lua_setfield(L, -2, "ec");
 #endif
 
   luaopen_x509(L);
   lua_setfield(L, -2, "x509");
-
+#ifndef LUA_OPENSSL_TINY
   luaopen_pkcs7(L);
   lua_setfield(L, -2, "pkcs7");
 
@@ -436,7 +435,7 @@ LUALIB_API int luaopen_openssl(lua_State*L)
 
   luaopen_cms(L);
   lua_setfield(L, -2, "cms");
-
+#endif
   luaopen_ssl(L);
   lua_setfield(L, -2, "ssl");
 
@@ -451,6 +450,7 @@ LUALIB_API int luaopen_openssl(lua_State*L)
   luaopen_dh(L);
   lua_setfield(L, -2, "dh");
 
+#ifndef LUA_OPENSSL_TINY
 #if (OPENSSL_VERSION_NUMBER >= 0x10101007L) && !defined(OPENSSL_NO_SM2)
   luaopen_sm2(L);
   lua_setfield(L, -2, "sm2");
@@ -458,6 +458,7 @@ LUALIB_API int luaopen_openssl(lua_State*L)
 
   luaopen_srp(L);
   lua_setfield(L, -2, "srp");
+#endif
 
 #ifdef ENABLE_OPENSSL_GLOBAL
   lua_pushvalue(L, -1);

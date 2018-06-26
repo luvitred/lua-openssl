@@ -4,7 +4,7 @@
 *
 * Author:  george zhao <zhaozg(at)gmail.com>
 \*=========================================================================*/
-
+#if !defined(LUA_OPENSSL_TINY)
 #include "openssl.h"
 #include "private.h"
 #if OPENSSL_VERSION_NUMBER > 0x00909000L && !defined (LIBRESSL_VERSION_NUMBER)
@@ -603,3 +603,4 @@ int luaopen_cms(lua_State *L)
 #endif
   return 1;
 }
+#endif

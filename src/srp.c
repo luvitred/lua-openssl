@@ -1,3 +1,4 @@
+#if !defined(LUA_OPENSSL_TINY)
 #include "openssl.h"
 #include "private.h"
 
@@ -198,4 +199,4 @@ int luaopen_srp(lua_State *L)
   lua_settable(L, -3);
   return 1;
 }
-
+#endif
