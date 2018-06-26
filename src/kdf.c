@@ -7,6 +7,7 @@ It base on EVP_KDF in OpenSSL v3.
 @usage
   hamc = require('openssl').kdf
 */
+#if !defined(LUA_OPENSSL_TINY)
 #include "lua.h"
 #include "openssl.h"
 #include "private.h"
@@ -601,3 +602,5 @@ int luaopen_kdf(lua_State *L)
 
   return 1;
 }
+
+#endif /* LUA_OPENSSL_TINY */

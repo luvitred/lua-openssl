@@ -5,7 +5,7 @@ pkcs12 module to create and parse PKCS#12(PFX) files.
 @usage
   pkcs12 = require('openssl').pkcs12
 */
-
+#if !defined(LUA_OPENSSL_TINY)
 #include "openssl.h"
 #include "private.h"
 
@@ -155,3 +155,5 @@ int luaopen_pkcs12(lua_State *L)
 
   return 1;
 }
+
+#endif /* LUA_OPENSSL_TINY */

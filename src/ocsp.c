@@ -13,6 +13,8 @@ Generate, sign, process OCSP request and response.
   ocsp = require'openssl'.ocsp
 */
 
+#if !defined(LUA_OPENSSL_TINY)
+
 #include "openssl.h"
 #include "private.h"
 #include "openssl/ocsp.h"
@@ -987,3 +989,5 @@ int luaopen_ocsp(lua_State *L)
 
   return 1;
 }
+
+#endif /* LUA_OPENSSL_TINY */

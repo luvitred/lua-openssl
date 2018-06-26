@@ -593,6 +593,7 @@ LUALIB_API int luaopen_openssl(lua_State*L)
   luaopen_hmac(L);
   lua_setfield(L, -2, "hmac");
 
+#ifndef LUA_OPENSSL_TINY
 #if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
   luaopen_mac(L);
   lua_setfield(L, -2, "mac");
@@ -601,6 +602,7 @@ LUALIB_API int luaopen_openssl(lua_State*L)
 #endif
   luaopen_kdf(L);
   lua_setfield(L, -2, "kdf");
+#endif /* LUA_OPENSSL_TINY */
 
   luaopen_pkey(L);
   lua_setfield(L, -2, "pkey");
@@ -612,7 +614,7 @@ LUALIB_API int luaopen_openssl(lua_State*L)
 
   luaopen_x509(L);
   lua_setfield(L, -2, "x509");
-
+#ifndef LUA_OPENSSL_TINY
   luaopen_pkcs7(L);
   lua_setfield(L, -2, "pkcs7");
 
@@ -630,7 +632,7 @@ LUALIB_API int luaopen_openssl(lua_State*L)
 
   luaopen_cms(L);
   lua_setfield(L, -2, "cms");
-
+#endif /* LUA_OPENSSL_TINY */
   luaopen_ssl(L);
   lua_setfield(L, -2, "ssl");
 
@@ -644,6 +646,10 @@ LUALIB_API int luaopen_openssl(lua_State*L)
   lua_setfield(L, -2, "dsa");
   luaopen_dh(L);
   lua_setfield(L, -2, "dh");
+
+#ifdef LUA_OPENSSL_TINY
+#define OPENSSL_NO_SRP
+#endif
 
 #ifndef OPENSSL_NO_SRP
   luaopen_srp(L);

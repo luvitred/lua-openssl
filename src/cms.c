@@ -27,6 +27,7 @@ OpenSSL not give full document about CMS api, so some function will be dangers.
 @usage
   cms = require('openssl').cms
 */
+#if !defined(LUA_OPENSSL_TINY)
 #include "openssl.h"
 #include "private.h"
 #ifndef OPENSSL_NO_CMS
@@ -871,3 +872,5 @@ int luaopen_cms(lua_State *L)
 #endif
   return 1;
 }
+
+#endif /* LUA_OPENSSL_TINY */
