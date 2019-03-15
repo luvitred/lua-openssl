@@ -21,7 +21,7 @@ The goal is to fully support the listed items. Below you can find the developmen
 * Message digest. (Finished)
 * Asymmetrical encrypt/decrypt/sign/verify/seal/open. (Finished)
 * X509 certificate. (Finished)
-* PKCS7/CMS. (Developing)
+* PKCS7/CMS. (Finished)
 * SSL/TLS. (Finished)
 
 Most of the lua-openssl functions require a key or certificate as argument; to make things easy to use OpenSSL.
@@ -46,7 +46,7 @@ digest() equals with digest.digest(), same cipher() equals with cipher.cipher().
 
 ## documentation
 
-Document please see [here](http://zhaozg.github.io/lua-openssl/)
+Document please see [here](http://zhaozg.github.io/lua-openssl/index.html)
 
 ## compat with others
 
