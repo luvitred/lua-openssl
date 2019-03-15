@@ -338,6 +338,9 @@ get FIPS mode
 */
 static int openssl_fips_mode(lua_State *L)
 {
+#if defined(LIBRESSL_VERSION_NUMBER)
+  return 0;
+#else
   int ret =0, on = 0;
   if(lua_isnone(L, 1))
   {
@@ -353,6 +356,7 @@ static int openssl_fips_mode(lua_State *L)
   else
     ret = openssl_pushresult(L, ret);
   return ret;
+#endif
 }
 
 #ifndef OPENSSL_NO_CRYPTO_MDEBUG
@@ -405,7 +409,9 @@ void CRYPTO_thread_cleanup(void);
 
 static int luaclose_openssl(lua_State *L)
 {
+#if !defined(LIBRESSL_VERSION_NUMBER)
   FIPS_mode_set(0);
+#endif
 #if defined(OPENSSL_THREADS)
   CRYPTO_thread_cleanup();
 #endif
@@ -421,15 +427,15 @@ static int luaclose_openssl(lua_State *L)
   CRYPTO_cleanup_all_ex_data();
 #ifndef OPENSSL_NO_CRYPTO_MDEBUG
 #if !(defined(OPENSSL_NO_STDIO) || defined(OPENSSL_NO_FP_API))
-#if OPENSSL_VERSION_NUMBER < 0x10101000L
+#if defined(LIBRESSL_VERSION_NUMBER) || OPENSSL_VERSION_NUMBER < 0x10101000L
   CRYPTO_mem_leaks_fp(stderr);
 #else
   if(CRYPTO_mem_leaks_fp(stderr)!=1)
   {
     fprintf(stderr,
-      "Please report a bug on https://github.com/zhaozg/lua-openssl."
-      "And if can, please provide a reproduce method and minimal code.\n"
-      "\n\tThank You.");
+            "Please report a bug on https://github.com/zhaozg/lua-openssl."
+            "And if can, please provide a reproduce method and minimal code.\n"
+            "\n\tThank You.");
   }
 #endif
 #endif /* OPENSSL_NO_STDIO or OPENSSL_NO_FP_API */
@@ -541,13 +547,12 @@ LUALIB_API int luaopen_openssl(lua_State*L)
   lua_setfield(L, -2, "dh");
 
 #ifndef LUA_OPENSSL_TINY
-#if (OPENSSL_VERSION_NUMBER >= 0x10101007L) && !defined(OPENSSL_NO_SM2)
-  luaopen_sm2(L);
-  lua_setfield(L, -2, "sm2");
-#endif
 
+#ifndef OPENSSL_NO_SRP
   luaopen_srp(L);
   lua_setfield(L, -2, "srp");
+#endif
+
 #endif
 
 #ifdef ENABLE_OPENSSL_GLOBAL
@@ -557,4 +562,3 @@ LUALIB_API int luaopen_openssl(lua_State*L)
 
   return 1;
 }
-

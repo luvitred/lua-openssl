@@ -2,6 +2,7 @@
 #include "openssl.h"
 #include "private.h"
 
+#ifndef OPENSSL_NO_SRP
 #include <openssl/srp.h>
 #include <openssl/bn.h>
 

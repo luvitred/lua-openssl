@@ -16,7 +16,7 @@ create and manage x509 certificate
 #define MYVERSION MYNAME " library for " LUA_VERSION " / Nov 2014 / "\
   "based on OpenSSL " SHLIB_VERSION_NUMBER
 
-static int openssl_push_purpose(lua_State*L , X509_PURPOSE* purpose)
+static int openssl_push_purpose(lua_State*L, X509_PURPOSE* purpose)
 {
   lua_newtable(L);
 
@@ -534,14 +534,15 @@ static LUA_FUNCTION(openssl_x509_parse)
 
   PUSH_ASN1_INTEGER(L, X509_get0_serialNumber(cert));
   lua_setfield(L, -2, "serialNumber");
+
   PUSH_ASN1_TIME(L, X509_get_notBefore(cert));
   lua_setfield(L, -2, "notBefore");
   PUSH_ASN1_TIME(L, X509_get_notAfter(cert));
   lua_setfield(L, -2, "notAfter");
 
   {
-    X509_ALGOR *palg = NULL;
-    ASN1_BIT_STRING *psig = NULL;
+    CONSTIFY_X509_get0 X509_ALGOR *palg = NULL;
+    CONSTIFY_X509_get0 ASN1_BIT_STRING *psig = NULL;
 
     X509_get0_signature(&psig, &palg, cert);
     if (palg != NULL)
@@ -686,7 +687,7 @@ static int verify_cb(int ok, X509_STORE_CTX *ctx)
 check x509 with ca certchian and option purpose
 purpose can be one of: ssl_client, ssl_server, ns_ssl_server, smime_sign, smime_encrypt, crl_sign, any, ocsp_helper, timestamp_sign
 @function check
-@tparam x509_store cacerts 
+@tparam x509_store cacerts
 @tparam x509_store untrusted certs  containing a bunch of certs that are not trusted but may be useful in validating the certificate.
 @tparam[opt] string purpose to check supported
 @treturn boolean result true for check pass
@@ -1208,7 +1209,10 @@ static int openssl_x509_extensions(lua_State* L)
     for (i = 0; i < n; i++)
     {
       X509_EXTENSION* ext = sk_X509_EXTENSION_value(others, i);
-      sk_X509_EXTENSION_push(exts, ext);
+      if (exts!=NULL)
+        sk_X509_EXTENSION_push(exts, ext);
+      else
+        X509_add_ext(self, ext, -1);
     }
     sk_X509_EXTENSION_free(others);
 #endif
@@ -1277,8 +1281,8 @@ static int openssl_x509_sign(lua_State*L)
     size_t sig_len;
     const char* sig = luaL_checklstring(L, 2, &sig_len);
     int nid = openssl_get_nid(L, 3);
-    ASN1_BIT_STRING *psig = NULL;
-    X509_ALGOR *palg = NULL;
+    CONSTIFY_X509_get0 ASN1_BIT_STRING *psig = NULL;
+    CONSTIFY_X509_get0 X509_ALGOR *palg = NULL;
     int ret;
 
     X509_get0_signature(&psig, &palg, x);
@@ -1301,8 +1305,8 @@ static int openssl_x509_verify(lua_State*L)
     int len = i2d_re_X509_tbs(x, &out);
     if (len > 0)
     {
-      ASN1_BIT_STRING *psig = NULL;
-      X509_ALGOR *palg = NULL;
+      CONSTIFY_X509_get0 ASN1_BIT_STRING *psig = NULL;
+      CONSTIFY_X509_get0 X509_ALGOR *palg = NULL;
 
       lua_pushlstring(L, (const char *)out, len);
       OPENSSL_free(out);

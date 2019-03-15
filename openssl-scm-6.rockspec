@@ -1,9 +1,9 @@
 package = "openssl"
-version = "scm-5"
+version = "scm-6"
 
 source = {
   url = "gitrec://github.com/zhaozg/lua-openssl",
-  tag = "0.7.2"
+  tag = "0.7.4"
 }
 
 description = {
@@ -40,11 +40,10 @@ build = {
         "src/ots.c","src/pkcs7.c","src/pkcs12.c","src/pkey.c",
         "src/rsa.c","src/ssl.c","src/th-lock.c","src/util.c",
         "src/x509.c","src/xattrs.c","src/xexts.c","src/xname.c",
-        "src/xalgor.c","src/xstore.c", "src/sm2.c","src/srp.c",
+        "src/xalgor.c","src/xstore.c", "src/srp.c",
         "deps/auxiliar/subsidiar.c"
       },
-      incdirs = {"${OPENSSL_INCDIR}", "$(OPENSSL_DIR)/include", "deps/auxiliar", "deps/lua-compat"},
-      libdirs = {"$(OPENSSL_LIBDIR}", "$(OPENSSL_DIR)/lib"},
+      incdirs = {"$(OPENSSL_DIR)/include", "deps/auxiliar", "deps/lua-compat"},
       defines = {"PTHREADS"},
       libraries = {"ssl", "crypto"},
     }
@@ -56,16 +55,26 @@ build = {
         openssl = {
           libraries = {"libeay32", "ssleay32", "ws2_32", "kernel32", "user32", "gdi32", "advapi32"},
           defines = {"LUA_BUILD_AS_DLL", "LUA_LIB", "WIN32_LEAN_AND_MEAN"},
+          incdirs = {"$(OPENSSL_DIR)/include"},
+          libdirs = {"$(OPENSSL_DIR)/lib"},
+        }
+      }
+    },
+    linux = {
+      modules = {
+        openssl = {
+          incdirs = {"$(OPENSSL_DIR)/include"},
+          libdirs = {"$(OPENSSL_DIR)/lib"},
         }
       }
     },
     macosx = {
       modules = {
         openssl = {
-          incdirs = {"/usr/local/opt/openssl/include"},
-          libdirs = {"/usr/local/opt/openssl/lib"},
+          incdirs = {"$(OPENSSL_DIR)/include"},
+          libdirs = {"$(OPENSSL_DIR)/lib"},
         }
-      }    
+      }
     }
   },
 }

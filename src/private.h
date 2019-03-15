@@ -41,12 +41,18 @@ extern "C" {
 
 #include "openssl.h"
 
+#if OPENSSL_VERSION_NUMBER > 0x10100000L
+#define CONSTIFY_X509_get0 const
+#else
+#define CONSTIFY_X509_get0
+#endif
+
 #define PUSH_BN(x)                                      \
   *(void **)(lua_newuserdata(L, sizeof(void *))) = (x); \
   luaL_getmetatable(L,"openssl.bn");                    \
   lua_setmetatable(L,-2)
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 int BIO_up_ref(BIO *b);
 int X509_up_ref(X509 *x);
 int X509_STORE_up_ref(X509_STORE *s);
@@ -109,9 +115,9 @@ const STACK_OF(X509_EXTENSION) *X509_CRL_get0_extensions(const X509_CRL *crl);
 
 void X509_CRL_get0_signature(const X509_CRL *crl, const ASN1_BIT_STRING **psig,
                              const X509_ALGOR **palg);
+
 const ASN1_INTEGER *TS_STATUS_INFO_get0_status(const TS_STATUS_INFO *a);
-const STACK_OF(ASN1_UTF8STRING) *
-TS_STATUS_INFO_get0_text(const TS_STATUS_INFO *a);
+const STACK_OF(ASN1_UTF8STRING) *TS_STATUS_INFO_get0_text(const TS_STATUS_INFO *a);
 const ASN1_BIT_STRING *TS_STATUS_INFO_get0_failure_info(const TS_STATUS_INFO *a);
 
 
@@ -122,11 +128,15 @@ X509_STORE *TS_VERIFY_CTX_set_store(TS_VERIFY_CTX *ctx, X509_STORE *s);
 STACK_OF(X509) *TS_VERIFY_CTS_set_certs(TS_VERIFY_CTX *ctx,
                                         STACK_OF(X509) *certs);
 unsigned char *TS_VERIFY_CTX_set_imprint(TS_VERIFY_CTX *ctx,
-    unsigned char *hexstr, long len);
+    unsigned char *hexstr,
+    long len);
 
-#if OPENSSL_VERSION_NUMBER < 0x10002000L
+#if OPENSSL_VERSION_NUMBER < 0x10002000L || defined(LIBRESSL_VERSION_NUMBER)
 int i2d_re_X509_tbs(X509 *x, unsigned char **pp);
-void X509_get0_signature(ASN1_BIT_STRING **psig, X509_ALGOR **palg,
+#endif
+#if OPENSSL_VERSION_NUMBER < 0x10002000L
+void X509_get0_signature(CONSTIFY_X509_get0 ASN1_BIT_STRING **psig,
+                         CONSTIFY_X509_get0 X509_ALGOR **palg,
                          const X509 *x);
 int X509_get_signature_nid(const X509 *x);
 #endif
@@ -194,10 +204,10 @@ int openssl_push_asn1object(lua_State* L, const ASN1_OBJECT* obj);
 int openssl_push_asn1(lua_State* L, const ASN1_STRING* string, int type);
 int openssl_push_general_name(lua_State*L, const GENERAL_NAME* name);
 
-#define PUSH_ASN1_TIME(L, tm)             openssl_push_asn1(L, (ASN1_STRING*)tm, V_ASN1_UTCTIME)
-#define PUSH_ASN1_INTEGER(L, i)           openssl_push_asn1(L, (ASN1_STRING*)i,  V_ASN1_INTEGER)
-#define PUSH_ASN1_OCTET_STRING(L, s)      openssl_push_asn1(L, (ASN1_STRING*)s,  V_ASN1_OCTET_STRING)
-#define PUSH_ASN1_STRING(L, s)            openssl_push_asn1(L, (ASN1_STRING*)s, V_ASN1_UNDEF)
+#define PUSH_ASN1_TIME(L, tm)             openssl_push_asn1(L, (ASN1_STRING*)(tm), V_ASN1_UTCTIME)
+#define PUSH_ASN1_INTEGER(L, i)           openssl_push_asn1(L, (ASN1_STRING*)(i),  V_ASN1_INTEGER)
+#define PUSH_ASN1_OCTET_STRING(L, s)      openssl_push_asn1(L, (ASN1_STRING*)(s),  V_ASN1_OCTET_STRING)
+#define PUSH_ASN1_STRING(L, s)            openssl_push_asn1(L, (ASN1_STRING*)(s),  V_ASN1_UNDEF)
 
 int openssl_push_xname_asobject(lua_State*L, X509_NAME* xname);
 int openssl_push_bit_string_bitname(lua_State* L, const BIT_STRING_BITNAME* name);
@@ -238,6 +248,12 @@ int openssl_sk_x509_algor_totable(lua_State *L, const STACK_OF(X509_ALGOR)* sk);
 int openssl_sk_x509_name_totable(lua_State *L, const STACK_OF(X509_NAME)* sk);
 
 X509_ATTRIBUTE* openssl_new_xattribute(lua_State*L, X509_ATTRIBUTE** a, int idx, const char* eprefix);
+
+#if !defined(OPENSSL_NO_SRP)
+#if defined(LIBRESSL_VERSION_NUMBER) || OPENSSL_VERSION_NUMBER <= 0x10002000
+#define OPENSSL_NO_SRP
+#endif
+#endif
 
 #ifdef HAVE_USER_CUSTOME
 #include HAVE_USER_CUSTOME

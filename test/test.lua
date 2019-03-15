@@ -3,8 +3,7 @@ EXPORT_ASSERT_TO_GLOBALS = true
 require'luaunit'
 
 openssl.rand_load()
-v = {openssl.version(true)}
-print(openssl.version())
+print('VERSION:', openssl.version())
 
 dofile('0.engine.lua')
 dofile('0.misc.lua')
@@ -34,7 +33,9 @@ dofile('ec.lua')
 dofile('sm2.lua')
 
 --LuaUnit.verbosity = 0
-LuaUnit.run()
+local runner = LuaUnit.new()
+runner:setOutputType("tap")
+runner:runSuite()
 print(openssl.error(true))
 collectgarbage()
 
