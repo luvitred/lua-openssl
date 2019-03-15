@@ -1,4 +1,3 @@
-#if !defined(LUA_OPENSSL_TINY)
 #include "openssl.h"
 #include "private.h"
 

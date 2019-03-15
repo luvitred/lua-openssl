@@ -546,13 +546,13 @@ LUALIB_API int luaopen_openssl(lua_State*L)
   luaopen_dh(L);
   lua_setfield(L, -2, "dh");
 
-#ifndef LUA_OPENSSL_TINY
+#ifdef LUA_OPENSSL_TINY
+#define OPENSSL_NO_SRP
+#endif
 
 #ifndef OPENSSL_NO_SRP
   luaopen_srp(L);
   lua_setfield(L, -2, "srp");
-#endif
-
 #endif
 
 #ifdef ENABLE_OPENSSL_GLOBAL
