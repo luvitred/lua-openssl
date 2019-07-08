@@ -891,6 +891,16 @@ static openssl_ssl_ctx_lua* openssl_get_ssl_ctx_lua(lua_State*L, SSL_CTX *sctx)
   return ctx;
 }
 
+static int openssl_ssl_ctx_set_ecdh_auto(lua_State *L)
+{
+#if OPENSSL_VERSION_NUMBER >= 0x10002000L && OPENSSL_VERSION_NUMBER < 0x10100000L
+  SSL_CTX* ctx = CHECK_OBJECT(1, SSL_CTX, "openssl.ssl_ctx");
+  int on_off = lua_toboolean(L, 2);
+  SSL_CTX_set_ecdh_auto(ctx, on_off);
+#endif
+  return 0;
+}
+
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
 static DH *tmp_dh_callback(SSL *ssl, int is_export, int keylength)
 {
@@ -1009,16 +1019,6 @@ static EC_KEY *tmp_ecdh_callback(SSL *ssl, int is_export, int keylength)
 
   lua_pop(L, 2);    /* Remove values from stack */
   return ec_tmp;
-}
-
-static int openssl_ssl_ctx_set_ecdh_auto(lua_State *L)
-{
-#if OPENSSL_VERSION_NUMBER >= 0x10002000L && OPENSSL_VERSION_NUMBER < 0x10100000L
-  SSL_CTX* ctx = CHECK_OBJECT(1, SSL_CTX, "openssl.ssl_ctx");
-  int on_off = lua_toboolean(L, 2);
-  SSL_CTX_set_ecdh_auto(ctx, on_off);
-#endif
-  return 0;
 }
 
 /***
