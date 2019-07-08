@@ -11,6 +11,12 @@ create and manage x509 certificate sign request
 #include "sk.h"
 #include <openssl/x509v3.h>
 
+#if OPENSSL_VERSION_NUMBER < 0x1010000fL || \
+	(defined(LIBRESSL_VERSION_NUMBER) && (LIBRESSL_VERSION_NUMBER < 0x20700000L))
+#define X509_CRL_set1_nextUpdate X509_CRL_set_nextUpdate
+#define X509_CRL_set1_lastUpdate X509_CRL_set_lastUpdate
+#endif
+
 int   X509_CRL_cmp(const X509_CRL *a, const X509_CRL *b);
 int   X509_CRL_match(const X509_CRL *a, const X509_CRL *b);
 
@@ -235,9 +241,9 @@ static LUA_FUNCTION(openssl_crl_new)
     ntm = ASN1_TIME_new();
     ASN1_TIME_set(ltm, lastUpdate);
     ASN1_TIME_set(ntm, nextUpdate);
-    ret = X509_CRL_set_lastUpdate(crl, ltm);
+    ret = X509_CRL_set1_lastUpdate(crl, ltm);
     if (ret == 1)
-      ret = X509_CRL_set_nextUpdate(crl, ntm);
+      ret = X509_CRL_set1_nextUpdate(crl, ntm);
     ASN1_TIME_free(ltm);
     ASN1_TIME_free(ntm);
   }
@@ -466,7 +472,7 @@ static LUA_FUNCTION(openssl_crl_lastUpdate)
   X509_CRL *crl = CHECK_OBJECT(1, X509_CRL, "openssl.x509_crl");
   if (lua_isnone(L, 2))
   {
-    ASN1_TIME *tm = X509_CRL_get_lastUpdate(crl);
+    ASN1_TIME const *tm = X509_CRL_get0_lastUpdate(crl);
     PUSH_ASN1_TIME(L, tm);
     return 1;
   }
@@ -477,7 +483,7 @@ static LUA_FUNCTION(openssl_crl_lastUpdate)
     ASN1_TIME *tm = ASN1_TIME_new();
     ASN1_TIME_set(tm, time);
 
-    ret = X509_CRL_set_lastUpdate(crl, tm);
+    ret = X509_CRL_set1_lastUpdate(crl, tm);
     ASN1_TIME_free(tm);
     return openssl_pushresult(L, ret);
   }
@@ -499,7 +505,7 @@ static LUA_FUNCTION(openssl_crl_nextUpdate)
   X509_CRL *crl = CHECK_OBJECT(1, X509_CRL, "openssl.x509_crl");
   if (lua_isnone(L, 2))
   {
-    ASN1_TIME *tm = X509_CRL_get_nextUpdate(crl);
+    ASN1_TIME const *tm = X509_CRL_get0_nextUpdate(crl);
     PUSH_ASN1_TIME(L, tm);
     return 1;
   }
@@ -510,7 +516,7 @@ static LUA_FUNCTION(openssl_crl_nextUpdate)
     ASN1_TIME *tm = ASN1_TIME_new();
     ASN1_TIME_set(tm, time);
 
-    ret = X509_CRL_set_nextUpdate(crl, tm);
+    ret = X509_CRL_set1_nextUpdate(crl, tm);
     ASN1_TIME_free(tm);
     return openssl_pushresult(L, ret);
   }
@@ -533,9 +539,9 @@ static LUA_FUNCTION(openssl_crl_updateTime)
   X509_CRL *crl = CHECK_OBJECT(1, X509_CRL, "openssl.x509_crl");
   if (lua_isnone(L, 2))
   {
-    ASN1_TIME *ltm, *ntm;
-    ltm = X509_CRL_get_lastUpdate(crl);
-    ntm = X509_CRL_get_nextUpdate(crl);
+    ASN1_TIME const *ltm, *ntm;
+    ltm = X509_CRL_get0_lastUpdate(crl);
+    ntm = X509_CRL_get0_nextUpdate(crl);
     PUSH_ASN1_TIME(L, ltm);
     PUSH_ASN1_TIME(L, ntm);
     return 2;
@@ -563,9 +569,9 @@ static LUA_FUNCTION(openssl_crl_updateTime)
     ASN1_TIME_set(ltm, last);
     ntm = ASN1_TIME_new();
     ASN1_TIME_set(ntm, next);
-    ret = X509_CRL_set_lastUpdate(crl, ltm);
+    ret = X509_CRL_set1_lastUpdate(crl, ltm);
     if (ret == 1)
-      ret = X509_CRL_set_nextUpdate(crl, ntm);
+      ret = X509_CRL_set1_nextUpdate(crl, ntm);
     ASN1_TIME_free(ltm);
     ASN1_TIME_free(ntm);
     openssl_pushresult(L, ret);
@@ -784,9 +790,9 @@ static LUA_FUNCTION(openssl_crl_parse)
   openssl_push_xname_asobject(L, X509_CRL_get_issuer(crl));
   lua_setfield(L, -2, "issuer");
 
-  PUSH_ASN1_TIME(L, X509_CRL_get_lastUpdate(crl));
+  PUSH_ASN1_TIME(L, X509_CRL_get0_lastUpdate(crl));
   lua_setfield(L, -2, "lastUpdate");
-  PUSH_ASN1_TIME(L, X509_CRL_get_nextUpdate(crl));
+  PUSH_ASN1_TIME(L, X509_CRL_get0_nextUpdate(crl));
   lua_setfield(L, -2, "nextUpdate");
 
   {

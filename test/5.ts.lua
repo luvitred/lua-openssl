@@ -1,7 +1,12 @@
 local openssl = require'openssl'
 
-local asn1,ts,asn1,csr = openssl.asn1,openssl.ts,openssl.asn1, openssl.x509.req
+local asn1,ts,csr = openssl.asn1,openssl.ts, openssl.x509.req
 
+local policy_oid = '1.2.3.4.100'
+local policy_obj = assert(asn1.new_object(policy_oid))
+local policies = {assert(asn1.new_object('1.1.3')),assert(asn1.new_object('1.1.4'))}
+local obja = assert(asn1.new_object({oid='1.2.3.4.5.6',sn='1.2.3.4.5.6_sn',ln='1.2.3.4.5.6_ln'}))
+local objb = assert(asn1.new_object({oid='1.2.3.4.5.7',sn='1.2.3.4.5.7_sn',ln='1.2.3.4.5.7_ln'}))
 
 testTSRequest = {}
 
@@ -52,10 +57,7 @@ testTSRequest = {}
         local nonce = openssl.bn.text(openssl.random(16))
         assert(req:nonce(nonce))
 
-        local oid = '1.2.3.4.100'
-
-        local obj = assert(asn1.new_object(oid))
-        assert(req:policy_id(obj))
+        assert(req:policy_id(policy_obj))
 
         local der = assert(req:export())
         local req1 = assert(ts.req_read(der))
@@ -65,18 +67,17 @@ testTSRequest = {}
         assertEquals(t.version,1)
 
         assertEquals(t.nonce:data(), nonce:totext())
-        assertEquals(t.policy_id:data(), oid)
+        assertEquals(t.policy_id:data(), policy_oid)
         assertEquals(t.msg_imprint.hashed_msg,self.hash)
         assertEquals(t.msg_imprint.hash_algo:tostring(), self.alg)
         return req
     end
 
-local first = true
 testTSSign = {}
 
     function testTSSign:setUp()
         local timeStamping = openssl.asn1.new_string('timeStamping',asn1.OCTET_STRING)
-        local timeStamping=asn1.new_type('timeStamping')
+        timeStamping = asn1.new_type('timeStamping')
         self.timeStamping = timeStamping:i2d()
         self.cafalse = openssl.asn1.new_string('CA:FALSE',asn1.OCTET_STRING)
 
@@ -90,11 +91,6 @@ extendedKeyUsage = critical,timeStamping
         self.digest = 'sha1WithRSAEncryption'
         self.md = openssl.digest.get('sha1WithRSAEncryption')
         self.hash = assert(self.md:digest(self.dat))
-        if first then
-            assert(asn1.new_object({oid='1.2.3.4.5.6',sn='1.2.3.4.5.6_sn',ln='1.2.3.4.5.6_ln'}))
-            assert(asn1.new_object({oid='1.2.3.4.5.7',sn='1.2.3.4.5.7_sn',ln='1.2.3.4.5.7_ln'}))
-            first = false
-        end
 
         --setUp private key and certificate
         local ca = {}
@@ -149,7 +145,6 @@ extendedKeyUsage = critical,timeStamping
         args.serialNumber = 1
     end
 
-
     function testTSSign:testSign1()
         testTSRequest:setUp()
         local req = testTSRequest:testReq1()
@@ -158,7 +153,7 @@ extendedKeyUsage = critical,timeStamping
         local req_ctx = assert(ts.resp_ctx_new(tsa.cert, tsa.pkey))
         assert(req_ctx:md({'md5','sha1'}))
         local res = req_ctx:sign(req)
-        t = assert(res:info())
+        local t = assert(res:info())
         assertIsTable(t)
         assert(t.status_info.status:tostring()=='02')
         assertEquals(#t.status_info.text,1)
@@ -170,11 +165,10 @@ extendedKeyUsage = critical,timeStamping
         local req = testTSRequest:testReq2()
 
         local tsa = self.tsa
-        local oid = '1.2.3.4.5.7'
-        local req_ctx = assert(ts.resp_ctx_new(tsa.cert, tsa.pkey, oid))
+        local req_ctx = assert(ts.resp_ctx_new(tsa.cert, tsa.pkey, policy_obj))
         assert(req_ctx:md({'md5','sha1'}))
         local res = req_ctx:sign(req)
-        t = assert(res:info())
+        local t = assert(res:info())
         assertIsTable(t)
 
         assert(t.status_info.status:tostring()=='0')
@@ -187,19 +181,19 @@ extendedKeyUsage = critical,timeStamping
         assertEquals(tst.serial:tostring(),'01')
         assertEquals(tst.version,1)
         assertEquals(tst.ordering,false)
-        assertEquals(tst.policy_id:txt(true),oid)
+        assertEquals(tst.policy_id:txt(true),policy_oid)
 
         local now = os.time()
         local function get_timezone()
           local now = os.time()
           return os.difftime(now, os.time(os.date("!*t", now)))
         end
-        timezone = get_timezone()
+        local timezone = get_timezone()
 
         assertEquals(tst.time:tostring(),os.date('%Y%m%d%H%M%SZ',now-timezone))
         assertIsString(tst.nonce:tostring())
 
-        local res = assert(openssl.ts.resp_read(res:export()))
+        res = assert(openssl.ts.resp_read(res:export()))
         local vry = assert(req:to_verify_ctx())
         vry:store(self.ca.store)
         assert(vry:verify(res))
@@ -210,12 +204,10 @@ extendedKeyUsage = critical,timeStamping
         local req = testTSRequest:testReq3()
 
         local tsa = self.tsa
-        local oid = '1.2.3.4.100'
-        local obj = assert(asn1.new_object(oid))
-        local req_ctx = assert(ts.resp_ctx_new(tsa.cert, tsa.pkey, obj))
+        local req_ctx = assert(ts.resp_ctx_new(tsa.cert, tsa.pkey, policy_obj))
         assert(req_ctx:md({'md5','sha1'}))
         local res = req_ctx:sign(req)
-        t = assert(res:info())
+        local t = assert(res:info())
         assertIsTable(t)
 
         assert(t.status_info.status:tostring()=='0')
@@ -228,19 +220,19 @@ extendedKeyUsage = critical,timeStamping
         assertEquals(tst.serial:tostring(),'01')
         assertEquals(tst.version,1)
         assertEquals(tst.ordering,false)
-        assertEquals(tst.policy_id:txt(true),oid)
+        assertEquals(tst.policy_id:txt(true),policy_oid)
 
         local now = os.time()
         local function get_timezone()
           local now = os.time()
           return os.difftime(now, os.time(os.date("!*t", now)))
         end
-        timezone = get_timezone()
+        local timezone = get_timezone()
 
         assertEquals(tst.time:tostring(),os.date('%Y%m%d%H%M%SZ',now-timezone))
         assertIsString(tst.nonce:tostring())
 
-        local res = assert(openssl.ts.resp_read(res:export()))
+        res = assert(openssl.ts.resp_read(res:export()))
         local vry = assert(req:to_verify_ctx())
         vry:store(self.ca.store)
         assert(vry:verify(res))
@@ -251,12 +243,10 @@ extendedKeyUsage = critical,timeStamping
         local req = testTSRequest:testReq3()
 
         local tsa = self.tsa
-        local oid = '1.2.3.4.100'
-        local obj = assert(asn1.new_object(oid))
-        local req_ctx = assert(ts.resp_ctx_new(tsa.cert, tsa.pkey, obj))
+        local req_ctx = assert(ts.resp_ctx_new(tsa.cert, tsa.pkey, policy_obj))
         assert(req_ctx:md({'md5','sha1'}))
         local res = req_ctx:sign(req)
-        t = assert(res:info())
+        local t = assert(res:info())
         assertIsTable(t)
 
         assert(t.status_info.status:tostring()=='0')
@@ -269,19 +259,19 @@ extendedKeyUsage = critical,timeStamping
         assertEquals(tst.serial:tostring(),'01')
         assertEquals(tst.version,1)
         assertEquals(tst.ordering,false)
-        assertEquals(tst.policy_id:txt(true),oid)
+        assertEquals(tst.policy_id:txt(true),policy_oid)
 
         local now = os.time()
         local function get_timezone()
           local now = os.time()
           return os.difftime(now, os.time(os.date("!*t", now)))
         end
-        timezone = get_timezone()
+        local timezone = get_timezone()
 
         assertEquals(tst.time:tostring(),os.date('%Y%m%d%H%M%SZ',now-timezone))
         assertIsString(tst.nonce:tostring())
 
-        local res = assert(openssl.ts.resp_read(res:export()))
+        res = assert(openssl.ts.resp_read(res:export()))
         local vry = ts.verify_ctx_new(req)
         vry:store(self.ca.store)
         assert(vry:verify(res))
@@ -292,12 +282,10 @@ extendedKeyUsage = critical,timeStamping
         local req = testTSRequest:testReq3()
 
         local tsa = self.tsa
-        local oid = '1.2.3.4.100'
-        local obj = assert(asn1.new_object(oid))
-        local req_ctx = assert(ts.resp_ctx_new(tsa.cert, tsa.pkey, obj))
+        local req_ctx = assert(ts.resp_ctx_new(tsa.cert, tsa.pkey, policy_obj))
         assert(req_ctx:md({'md5','sha1'}))
         local res = req_ctx:sign(req)
-        t = assert(res:info())
+        local t = assert(res:info())
         assertIsTable(t)
 
         assert(t.status_info.status:tostring()=='0')
@@ -310,14 +298,14 @@ extendedKeyUsage = critical,timeStamping
         assertEquals(tst.serial:tostring(),'01')
         assertEquals(tst.version,1)
         assertEquals(tst.ordering,false)
-        assertEquals(tst.policy_id:txt(true),oid)
+        assertEquals(tst.policy_id:txt(true),policy_oid)
 
         local now = os.time()
         local function get_timezone()
           local now = os.time()
           return os.difftime(now, os.time(os.date("!*t", now)))
         end
-        timezone = get_timezone()
+        local timezone = get_timezone()
 
         assertEquals(tst.time:tostring(),os.date('%Y%m%d%H%M%SZ',now-timezone))
         assertIsString(tst.nonce:tostring())
@@ -333,12 +321,10 @@ extendedKeyUsage = critical,timeStamping
         local req = testTSRequest:testReq3()
 
         local tsa = self.tsa
-        local oid = '1.2.3.4.100'
-        local obj = assert(asn1.new_object(oid))
-        local req_ctx = assert(ts.resp_ctx_new(tsa.cert, tsa.pkey, obj))
+        local req_ctx = assert(ts.resp_ctx_new(tsa.cert, tsa.pkey, policy_obj))
         assert(req_ctx:md({'md5','sha1'}))
         local res = req_ctx:sign(req)
-        t = assert(res:info())
+        local t = assert(res:info())
         assertIsTable(t)
 
         assert(t.status_info.status:tostring()=='0')
@@ -351,14 +337,14 @@ extendedKeyUsage = critical,timeStamping
         assertEquals(tst.serial:tostring(),'01')
         assertEquals(tst.version,1)
         assertEquals(tst.ordering,false)
-        assertEquals(tst.policy_id:txt(true),oid)
+        assertEquals(tst.policy_id:txt(true),policy_oid)
 
         local now = os.time()
         local function get_timezone()
           local now = os.time()
           return os.difftime(now, os.time(os.date("!*t", now)))
         end
-        timezone = get_timezone()
+        local timezone = get_timezone()
 
         assertEquals(tst.time:tostring(),os.date('%Y%m%d%H%M%SZ',now-timezone))
         assertIsString(tst.nonce:tostring())
@@ -374,12 +360,10 @@ extendedKeyUsage = critical,timeStamping
         local req = testTSRequest:testReq3()
 
         local tsa = self.tsa
-        local oid = '1.2.3.4.100'
-        local obj = assert(asn1.new_object(oid))
-        local req_ctx = assert(ts.resp_ctx_new(tsa.cert, tsa.pkey, obj))
+        local req_ctx = assert(ts.resp_ctx_new(tsa.cert, tsa.pkey, policy_obj))
         assert(req_ctx:md({'md5','sha1'}))
         local res = req_ctx:sign(req)
-        t = assert(res:info())
+        local t = assert(res:info())
         assertIsTable(t)
 
         assert(t.status_info.status:tostring()=='0')
@@ -392,14 +376,14 @@ extendedKeyUsage = critical,timeStamping
         assertEquals(tst.serial:tostring(),'01')
         assertEquals(tst.version,1)
         assertEquals(tst.ordering,false)
-        assertEquals(tst.policy_id:txt(true),oid)
+        assertEquals(tst.policy_id:txt(true),policy_oid)
 
         local now = os.time()
         local function get_timezone()
           local now = os.time()
           return os.difftime(now, os.time(os.date("!*t", now)))
         end
-        timezone = get_timezone()
+        local timezone = get_timezone()
 
         assertEquals(tst.time:tostring(),os.date('%Y%m%d%H%M%SZ',now-timezone))
         assertIsString(tst.nonce:tostring())
@@ -416,13 +400,11 @@ extendedKeyUsage = critical,timeStamping
         local req = testTSRequest:testReq3()
 
         local tsa = self.tsa
-        local oid = '1.2.3.4.100'
-        local obj = assert(asn1.new_object(oid))
-        local req_ctx = assert(ts.resp_ctx_new(tsa.cert, tsa.pkey, obj))
+        local req_ctx = assert(ts.resp_ctx_new(tsa.cert, tsa.pkey, policy_obj))
         assert(req_ctx:md({'md5','sha1'}))
-        assert(req_ctx:policies({assert(asn1.new_object('1.1.3')),assert(asn1.new_object('1.1.4'))}))
+        assert(req_ctx:policies(policies))
         local res = req_ctx:sign(req)
-        t = assert(res:info())
+        local t = assert(res:info())
         assertIsTable(t)
 
         assert(t.status_info.status:tostring()=='0')
@@ -435,13 +417,13 @@ extendedKeyUsage = critical,timeStamping
         assertEquals(tst.serial:tostring(),'01')
         assertEquals(tst.version,1)
         assertEquals(tst.ordering,false)
-        assertEquals(tst.policy_id:txt(true),oid)
+        assertEquals(tst.policy_id:txt(true),policy_oid)
         local now = os.time()
         local function get_timezone()
           local now = os.time()
           return os.difftime(now, os.time(os.date("!*t", now)))
         end
-        timezone = get_timezone()
+        local timezone = get_timezone()
 
         assertEquals(tst.time:tostring(),os.date('%Y%m%d%H%M%SZ',now-timezone))
         assertIsString(tst.nonce:tostring())
@@ -457,7 +439,7 @@ testTSComplex = {}
 
     function testTSComplex:setUp()
         local timeStamping = openssl.asn1.new_string('timeStamping',asn1.OCTET_STRING)
-        local timeStamping=asn1.new_type('timeStamping')
+        timeStamping = asn1.new_type('timeStamping')
         self.timeStamping = timeStamping:i2d()
         self.cafalse = openssl.asn1.new_string('CA:FALSE',asn1.OCTET_STRING)
 
@@ -471,11 +453,6 @@ extendedKeyUsage = critical,timeStamping
         self.digest = 'sha1WithRSAEncryption'
         self.md = openssl.digest.get('sha1WithRSAEncryption')
         self.hash = assert(self.md:digest(self.dat))
-        if first then
-            assert(asn1.new_object({oid='1.2.3.4.5.6',sn='1.2.3.4.5.6_sn',ln='1.2.3.4.5.6_ln'}))
-            assert(asn1.new_object({oid='1.2.3.4.5.7',sn='1.2.3.4.5.7_sn',ln='1.2.3.4.5.7_ln'}))
-            first = false
-        end
 
         --setUp private key and certificate
         local ca = {}
@@ -535,11 +512,9 @@ extendedKeyUsage = critical,timeStamping
         local req = testTSRequest:testReq3()
 
         local tsa = self.tsa
-        local oid = '1.2.3.4.100'
-        local obj = assert(asn1.new_object(oid))
-        local req_ctx = assert(ts.resp_ctx_new(tsa.cert, tsa.pkey, obj))
+        local req_ctx = assert(ts.resp_ctx_new(tsa.cert, tsa.pkey, policy_obj))
         assert(req_ctx:md({'md5','sha1'}))
-        assert(req_ctx:policies({assert(asn1.new_object('1.1.3')),assert(asn1.new_object('1.1.4'))}))
+        assert(req_ctx:policies(policies))
 
         local sn = 0
         req_ctx:set_serial_cb(function(self)
@@ -554,7 +529,7 @@ extendedKeyUsage = critical,timeStamping
 
         assert(pcall(function()
         local res = req_ctx:sign(req)
-        t = assert(res:info())
+        local t = assert(res:info())
         assertIsTable(t)
 
         assert(t.status_info.status:tostring()=='0')
@@ -567,13 +542,13 @@ extendedKeyUsage = critical,timeStamping
         assertEquals(tst.serial:tostring(),string.format('%02x',sn))
         assertEquals(tst.version,1)
         assertEquals(tst.ordering,false)
-        assertEquals(tst.policy_id:txt(true),oid)
+        assertEquals(tst.policy_id:txt(true),policy_oid)
 
         local function get_timezone()
           local now = os.time()
           return os.difftime(now, os.time(os.date("!*t", now)))
         end
-        timezone = get_timezone()
+        local timezone = get_timezone()
 
         assertEquals(tst.time:tostring(),os.date('%Y%m%d%H%M%SZ',now-timezone))
         assertIsString(tst.nonce:tostring())

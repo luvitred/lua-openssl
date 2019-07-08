@@ -200,7 +200,7 @@ EC_GROUP* openssl_get_ec_group(lua_State* L, int ec_name_idx, int param_enc_idx,
   else if (lua_isstring(L, ec_name_idx))
   {
     const char* name = luaL_checkstring(L, ec_name_idx);
-    nid = OBJ_sn2nid(name);
+    nid = OBJ_txt2nid(name);
   }
   else if (lua_isuserdata(L, ec_name_idx))
   {
@@ -326,7 +326,7 @@ static int openssl_ec_point_point2oct(lua_State *L)
 {
   const EC_GROUP* group = CHECK_OBJECT(1, EC_GROUP, "openssl.ec_group");
   const EC_POINT* point = CHECK_OBJECT(2, EC_POINT, "openssl.ec_point");
-  point_conversion_form_t form = openssl_point_conversion_form(L, 3, NULL);
+  point_conversion_form_t form = openssl_point_conversion_form(L, 3, "uncompressed");
   size_t size = EC_POINT_point2oct(group, point, form, NULL, 0, NULL);
   if(size>0)
   {
@@ -358,7 +358,7 @@ static int openssl_ec_point_point2bn(lua_State *L)
 {
   const EC_GROUP* group = CHECK_OBJECT(1, EC_GROUP, "openssl.ec_group");
   const EC_POINT* point = CHECK_OBJECT(2, EC_POINT, "openssl.ec_point");
-  point_conversion_form_t form = openssl_point_conversion_form(L, 3, NULL);
+  point_conversion_form_t form = openssl_point_conversion_form(L, 3, "uncompressed");
 
   BIGNUM *bn = EC_POINT_point2bn(group, point, form, NULL, NULL);
   if(bn)
@@ -385,11 +385,14 @@ static int openssl_ec_point_point2hex(lua_State *L)
 {
   const EC_GROUP* group = CHECK_OBJECT(1, EC_GROUP, "openssl.ec_group");
   const EC_POINT* point = CHECK_OBJECT(2, EC_POINT, "openssl.ec_point");
-  point_conversion_form_t form = openssl_point_conversion_form(L, 3, NULL);
+  point_conversion_form_t form = openssl_point_conversion_form(L, 3, "uncompressed");
 
-  const char* hex = EC_POINT_point2hex(group, point, form, NULL);
+  char* hex = EC_POINT_point2hex(group, point, form, NULL);
   if(hex)
+  {
     lua_pushstring(L, hex);
+    OPENSSL_free(hex);
+  }
   else
     lua_pushnil(L);
   return 1;
@@ -609,6 +612,7 @@ static int openssl_ecdh_compute_key(lua_State*L)
 
 static int openssl_ecdsa_set_method(lua_State *L)
 {
+#ifndef OPENSSL_NO_ENGINE
   EC_KEY *ec = CHECK_OBJECT(1, EC_KEY, "openssl.ec_key");
   ENGINE *e = CHECK_OBJECT(2, ENGINE, "openssl.engine");
 #if defined(LIBRESSL_VERSION_NUMBER) || OPENSSL_VERSION_NUMBER < 0x10100000L
@@ -626,6 +630,7 @@ static int openssl_ecdsa_set_method(lua_State *L)
     return openssl_pushresult(L, r);
   }
 #endif
+#endif
   return 0;
 }
 
@@ -641,6 +646,24 @@ static int openssl_ec_key_export(lua_State *L)
   if(der)
     OPENSSL_free(der);
   return 1;
+}
+
+static int openssl_ec_key_group(lua_State *L)
+{
+  EC_KEY *ec = CHECK_OBJECT(1, EC_KEY, "openssl.ec_key");
+  if(lua_isnone(L, 2))
+  {
+    EC_GROUP *g = CHECK_OBJECT(2, EC_GROUP, "openssl.ec_group");
+    int ret = EC_KEY_set_group(ec, g);
+    return openssl_pushresult(L, ret);
+  }
+  else
+  {
+    const EC_GROUP *g = EC_KEY_get0_group(ec);
+    g = EC_GROUP_dup(g);
+    PUSH_OBJECT(g, "openssl.ec_group");
+    return 1;
+  }
 }
 
 static int openssl_ec_key_read(lua_State *L)
@@ -664,6 +687,7 @@ static luaL_Reg ec_key_funs[] =
 {
   {"export",      openssl_ec_key_export},
   {"parse",       openssl_ec_key_parse},
+  {"group",       openssl_ec_key_group},
   {"sign",        openssl_ecdsa_sign},
   {"verify",      openssl_ecdsa_verify},
   {"compute_key", openssl_ecdh_compute_key},

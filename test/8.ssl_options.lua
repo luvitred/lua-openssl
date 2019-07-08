@@ -3,7 +3,8 @@ local openssl = require'openssl'
 local ssl = openssl.ssl
 local helper = require'helper'
 
-local proto = 'TLSv1'
+local proto = helper.sslProtocol()
+
 local SET = function(t)
   local s = {}
   for _, k in ipairs(t) do s[k] = true end
@@ -29,7 +30,7 @@ TestSSLOptions = {}
             assert(libressl or t.no_sslv3)
             assert(t.no_ticket)
 
-            assert(not pcall(self.ctx.options, ctx, true, nil))
+            assert(not pcall(self.ctx.options, self.ctx, true, nil))
             assertIsTable(t)
             assert(libressl or t.no_sslv3)
             assert(t.no_ticket)

@@ -12,6 +12,11 @@ lua-openssl binding, provide openssl base function in lua.
 #include <openssl/engine.h>
 #include <openssl/opensslconf.h>
 #include "private.h"
+#if defined(__APPLE__)
+#include <stdatomic.h>
+#else
+#include "stdatomic.h"
+#endif
 
 /***
 get lua-openssl version
@@ -203,9 +208,25 @@ static LUA_FUNCTION(openssl_error_string)
 }
 
 /***
+mixes the num bytes at buf into the PRNG state.
+@function rand_add
+@tparam string seed data to seed random generator
+@tparam number entropy the lower bound of an estimate of how much randomness is contained in buf, measured in bytes.
+*/
+static int openssl_random_add(lua_State*L)
+{
+  size_t num = 0;
+  const void *buf = luaL_checklstring(L, 1, &num);
+  double entropy = luaL_optinteger(L, 2, num);
+
+  RAND_add(buf, num, entropy);
+  return 0;
+}
+
+/***
 load rand seed from file
 @function rand_load
-@tparam[opt=nil] string file path to laod seed, default opensl management
+@tparam[opt=nil] string file path to laod seed, default openssl management
 @treturn boolean result
 */
 static int openssl_random_load(lua_State*L)
@@ -265,17 +286,6 @@ static int openssl_random_status(lua_State *L)
 }
 
 /***
-cleanup random genrator
-@function rand_cleanup
-*/
-static int openssl_random_cleanup(lua_State *L)
-{
-  (void) L;
-  RAND_cleanup();
-  return 0;
-}
-
-/***
 get random bytes
 @function random
 @tparam number length
@@ -310,7 +320,7 @@ static LUA_FUNCTION(openssl_random_bytes)
   }
   else
   {
-    ret = RAND_pseudo_bytes((byte*)buffer, length);
+    ret = RAND_bytes((byte*)buffer, length);
     if (ret == 1)
     {
       lua_pushlstring(L, buffer, length);
@@ -365,7 +375,6 @@ static int openssl_mem_leaks(lua_State*L)
   BIO *bio = BIO_new(BIO_s_mem());
   BUF_MEM* mem;
 
-  /* OBJ_cleanup */
   CRYPTO_mem_leaks(bio);
   BIO_get_mem_ptr(bio, &mem);
   lua_pushlstring(L, mem->data, mem->length);
@@ -390,9 +399,9 @@ static const luaL_Reg eay_functions[] =
   {"mem_leaks",   openssl_mem_leaks},
 #endif
   {"rand_status", openssl_random_status},
+  {"rand_add",    openssl_random_add},
   {"rand_load",   openssl_random_load},
   {"rand_write",  openssl_random_write},
-  {"rand_cleanup", openssl_random_cleanup},
   {"random",      openssl_random_bytes},
 
   {"error",       openssl_error_string},
@@ -407,10 +416,38 @@ void CRYPTO_thread_setup(void);
 void CRYPTO_thread_cleanup(void);
 #endif
 
+static atomic_uint init =
+#ifdef _MSC_VER
+{ 0 };
+#else
+  ATOMIC_VAR_INIT(0);
+#endif
+
 static int luaclose_openssl(lua_State *L)
 {
+  if(atomic_fetch_sub(&init, 1) > 1)
+    return 0;
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 #if !defined(LIBRESSL_VERSION_NUMBER)
   FIPS_mode_set(0);
+#endif
+
+  OBJ_cleanup();
+  EVP_cleanup();
+  ENGINE_cleanup();
+  RAND_cleanup();
+
+#if OPENSSL_VERSION_NUMBER >= 0x10002000L && !defined(LIBRESSL_VERSION_NUMBER)
+  SSL_COMP_free_compression_methods();
+#endif
+  COMP_zlib_cleanup();
+
+
+#if OPENSSL_VERSION_NUMBER < 0x10000000L
+  ERR_remove_state(0);
+#elif OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+  ERR_remove_thread_state(NULL);
 #endif
 #if defined(OPENSSL_THREADS)
   CRYPTO_thread_cleanup();
@@ -418,13 +455,11 @@ static int luaclose_openssl(lua_State *L)
   CRYPTO_set_locking_callback(NULL);
   CRYPTO_set_id_callback(NULL);
 
-  ENGINE_cleanup();
-  CONF_modules_unload(1);
-
-  ERR_free_strings();
-  EVP_cleanup();
-
   CRYPTO_cleanup_all_ex_data();
+  ERR_free_strings();
+
+  CONF_modules_free();
+  CONF_modules_unload(1);
 #ifndef OPENSSL_NO_CRYPTO_MDEBUG
 #if !(defined(OPENSSL_NO_STDIO) || defined(OPENSSL_NO_FP_API))
 #if defined(LIBRESSL_VERSION_NUMBER) || OPENSSL_VERSION_NUMBER < 0x10101000L
@@ -440,14 +475,15 @@ static int luaclose_openssl(lua_State *L)
 #endif
 #endif /* OPENSSL_NO_STDIO or OPENSSL_NO_FP_API */
 #endif /* OPENSSL_NO_CRYPTO_MDEBUG */
+#endif /* OPENSSL_VERSION_NUMBER < 0x10100000L or defined(LIBRESSL_VERSION_NUMBER) */
   return 0;
 }
 
 LUALIB_API int luaopen_openssl(lua_State*L)
 {
-  static void* init = NULL;
-  if (init == NULL)
+  if (atomic_fetch_add(&init, 1) == 0)
   {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 #if defined(OPENSSL_THREADS)
     CRYPTO_thread_setup();
 #endif
@@ -459,9 +495,13 @@ LUALIB_API int luaopen_openssl(lua_State*L)
     ERR_load_ERR_strings();
     ERR_load_EVP_strings();
     ERR_load_crypto_strings();
+    ERR_load_SSL_strings();
+#endif
 
+#ifndef OPENSSL_NO_ENGINE
     ENGINE_load_dynamic();
     ENGINE_load_openssl();
+#endif
 #ifdef LOAD_ENGINE_CUSTOM
     LOAD_ENGINE_CUSTOM
 #endif
@@ -473,15 +513,11 @@ LUALIB_API int luaopen_openssl(lua_State*L)
   }
 
   lua_newtable(L);
-  if(init==NULL)
-  {
-    init = lua_newuserdata(L, sizeof(int));
-    lua_newtable(L);
-    lua_pushcfunction(L, luaclose_openssl);
-    lua_setfield(L, -2, "__gc");
-    lua_setmetatable(L, -2);
-    lua_setfield(L, -2, "__guard");
-  }
+
+  lua_newtable(L);
+  lua_pushcfunction(L, luaclose_openssl);
+  lua_setfield(L, -2, "__gc");
+  lua_setmetatable(L, -2);
 
   luaL_setfuncs(L, eay_functions, 0);
 

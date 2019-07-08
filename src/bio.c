@@ -8,6 +8,7 @@ openssl.bio is a help object, it is useful, but rarely use.
 */
 #include "openssl.h"
 #include "private.h"
+#include <openssl/bn.h>
 #include <openssl/ssl.h>
 
 #define MYNAME    "bio"
@@ -755,6 +756,7 @@ static LUA_FUNCTION(openssl_bio_fd)
   return 1;
 }
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 void BIO_info_callback(BIO *bio, int cmd, const char *argp,
                        int argi, long argl, long ret)
 {
@@ -776,21 +778,21 @@ void BIO_info_callback(BIO *bio, int cmd, const char *argp,
   case BIO_CB_READ:
     if (BIO_method_type(bio) & BIO_TYPE_DESCRIPTOR)
       snprintf(p, p_maxlen, "read(%lu,%lu) - %s fd=%lu\n",
-               BIO_number_read(bio), (unsigned long)argi,
-               BIO_method_name(bio), BIO_number_read(bio));
+               (unsigned long)BIO_number_read(bio), (unsigned long)argi,
+               BIO_method_name(bio), (unsigned long)BIO_number_read(bio));
     else
       snprintf(p, p_maxlen, "read(%lu,%lu) - %s\n",
-               BIO_number_read(bio), (unsigned long)argi,
+               (unsigned long)BIO_number_read(bio), (unsigned long)argi,
                BIO_method_name(bio));
     break;
   case BIO_CB_WRITE:
     if (BIO_method_type(bio) & BIO_TYPE_DESCRIPTOR)
       snprintf(p, p_maxlen, "write(%lu,%lu) - %s fd=%lu\n",
-               BIO_number_written(bio), (unsigned long)argi,
-               BIO_method_name(bio), BIO_number_written(bio));
+               (unsigned long)BIO_number_written(bio), (unsigned long)argi,
+               BIO_method_name(bio), (unsigned long)BIO_number_written(bio));
     else
       snprintf(p, p_maxlen, "write(%lu,%lu) - %s\n",
-               BIO_number_written(bio), (unsigned long)argi,
+               (unsigned long)BIO_number_written(bio), (unsigned long)argi,
                BIO_method_name(bio));
     break;
   case BIO_CB_PUTS:
@@ -847,6 +849,7 @@ static LUA_FUNCTION(openssl_bio_set_callback)
   ret = BIO_set_info_callback(bio, BIO_info_callback);
   return openssl_pushresult(L, ret);
 }
+#endif
 
 /***
 return pending length of bytes to read and write
@@ -888,7 +891,9 @@ static luaL_Reg bio_funs[] =
   {"reset", openssl_bio_reset },
   {"retry", openssl_bio_retry },
   {"pending", openssl_bio_pending },
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
   {"set_callback", openssl_bio_set_callback },
+#endif
 
   /* for filter bio */
   {"push",  openssl_bio_push  },

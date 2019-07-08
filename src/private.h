@@ -42,10 +42,11 @@ extern "C" {
 #include "openssl.h"
 
 #if OPENSSL_VERSION_NUMBER > 0x10100000L
-#define CONSTIFY_X509_get0 const
+#define CONSTIFY_OPENSSL const
 #else
-#define CONSTIFY_X509_get0
+#define CONSTIFY_OPENSSL
 #endif
+#define CONSTIFY_X509_get0 CONSTIFY_OPENSSL
 
 #define PUSH_BN(x)                                      \
   *(void **)(lua_newuserdata(L, sizeof(void *))) = (x); \
@@ -141,7 +142,10 @@ void X509_get0_signature(CONSTIFY_X509_get0 ASN1_BIT_STRING **psig,
 int X509_get_signature_nid(const X509 *x);
 #endif
 
-#endif
+const unsigned char *ASN1_STRING_get0_data(const ASN1_STRING *x);
+const ASN1_TIME *X509_CRL_get0_lastUpdate(const X509_CRL *crl);
+const ASN1_TIME *X509_CRL_get0_nextUpdate(const X509_CRL *crl);
+#endif /* < 1.1.0 */
 
 #define AUXILIAR_SETOBJECT(L, cval, ltype, idx, lvar) \
   do {                                                \
@@ -212,7 +216,7 @@ int openssl_push_general_name(lua_State*L, const GENERAL_NAME* name);
 int openssl_push_xname_asobject(lua_State*L, X509_NAME* xname);
 int openssl_push_bit_string_bitname(lua_State* L, const BIT_STRING_BITNAME* name);
 
-int openssl_get_nid(lua_State*L, int idx);
+ASN1_OBJECT* openssl_get_asn1object(lua_State*L, int idx, int retnil);
 EC_GROUP* openssl_get_ec_group(lua_State* L, int ec_name_idx, int param_enc_idx,
                                int conv_form_idx);
 int openssl_get_padding(lua_State *L, int idx, const char *defval);

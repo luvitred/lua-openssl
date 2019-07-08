@@ -1,4 +1,5 @@
 local openssl = require'openssl'
+local helper = require'helper'
 local ssl,pkey,x509 = openssl.ssl,openssl.pkey,openssl.x509
 
 local M = {}
@@ -24,9 +25,10 @@ local params = {
    options = {"all", "no_sslv2"},
    password = 'password'
 }
---]]    
+--]]
+    print(params.protocol)
     local protocol = params.protocol and string.upper(string.sub(params.protocol,1,3))
-        ..string.sub(params.protocol,4,-1) or 'TLSv1_2'
+        ..string.sub(params.protocol,4,-1) or helper.sslProtocol()
     local ctx = ssl.ctx_new(protocol,params.ciphers)
     local xkey = nil
     if (type(params.password)=='nil') then
@@ -49,7 +51,7 @@ local params = {
         ctx:verify_locations(params.cafile,params.capath)
     end
 
-    unpack = unpack or table.unpack   
+    local unpack = unpack or table.unpack
     if(params.verify) then
         ctx:verify_mode(params.verify)
     end
@@ -62,7 +64,7 @@ local params = {
     end
     if params.verifyext then
         for k,v in pairs(params.verifyext) do
-            params.verifyext[k] = string.gsub(v,'lsec_','')        
+            params.verifyext[k] = string.gsub(v,'lsec_','')
         end
         ctx:set_cert_verify(params.verifyext)
     end
