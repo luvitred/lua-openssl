@@ -60,6 +60,19 @@ static int openssl_xalgor_dup(lua_State* L)
 }
 
 #if OPENSSL_VERSION_NUMBER >= 0x10002000L
+
+/* copy from openssl_x_algor.c */
+static int _X509_ALGOR_cmp(const X509_ALGOR *a, const X509_ALGOR *b)
+{
+    int rv;
+    rv = OBJ_cmp(a->algorithm, b->algorithm);
+    if (rv)
+        return rv;
+    if (!a->parameter && !b->parameter)
+        return 0;
+    return ASN1_TYPE_cmp(a->parameter, b->parameter);
+}
+
 /***
 compare with other x509_algor object
 @function equals
@@ -69,7 +82,7 @@ static int openssl_xalgor_cmp(lua_State* L)
 {
   X509_ALGOR* alg = CHECK_OBJECT(1, X509_ALGOR, "openssl.x509_algor");
   X509_ALGOR* ano = CHECK_OBJECT(2, X509_ALGOR, "openssl.x509_algor");
-  lua_pushboolean(L, X509_ALGOR_cmp(alg, ano) == 0);
+  lua_pushboolean(L, _X509_ALGOR_cmp(alg, ano) == 0);
   return 1;
 }
 #endif
