@@ -79,6 +79,8 @@ static LUA_FUNCTION(openssl_pkcs12_export)
     lua_pushlstring(L, bio_buf->data, bio_buf->length);
     ret = 1;
   }
+  if (ca!=NULL)
+    sk_X509_pop_free(ca, X509_free);
   BIO_free(bio_out);
   PKCS12_free(p12);
 
@@ -107,9 +109,9 @@ static LUA_FUNCTION(openssl_pkcs12_read)
 
   BIO * bio_in = load_bio_object(L, 1);
   const char *pass = luaL_checkstring(L, 2);
-  if (!lua_isnoneornil(L, 3))
+  if (!lua_isnone(L, 3))
     base64 = auxiliar_checkboolean(L, 3);
-  if (!lua_isnoneornil(L, 4))
+  if (!lua_isnone(L, 4))
     olb64 = auxiliar_checkboolean(L, 4);
 
   if (base64)
@@ -124,8 +126,8 @@ static LUA_FUNCTION(openssl_pkcs12_read)
   {
     lua_newtable(L);
 
-    AUXILIAR_SETOBJECT(L, cert, "openssl.x509" , -1, "cert");
-    AUXILIAR_SETOBJECT(L, pkey, "openssl.evp_pkey" , -1, "pkey");
+    AUXILIAR_SETOBJECT(L, cert, "openssl.x509", -1, "cert");
+    AUXILIAR_SETOBJECT(L, pkey, "openssl.evp_pkey", -1, "pkey");
     lua_pushstring(L, "extracerts");
     openssl_sk_x509_totable(L, ca);
     lua_rawset(L, -3);
@@ -158,4 +160,5 @@ int luaopen_pkcs12(lua_State *L)
 
   return 1;
 }
+
 #endif
