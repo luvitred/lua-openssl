@@ -11,10 +11,6 @@ digest module for lua-openssl binding
 #include <openssl/engine.h>
 #endif
 
-#define MYNAME    "digest"
-#define MYVERSION MYNAME " library for " LUA_VERSION " / Nov 2014 / "\
-  "based on OpenSSL " SHLIB_VERSION_NUMBER
-
 /***
 list all support digest algs
 
@@ -349,7 +345,7 @@ get result of digest
 
 @function final
 @tparam[opt] string last last part of data
-@tparam[opt] boolean raw binary or hex encoded result, default true for binary result
+@tparam[opt] boolean raw binary or hexadecimal result, default false for hexadecimal result
 @treturn string val hash result
 */
 static LUA_FUNCTION(openssl_evp_digest_final)
@@ -372,6 +368,8 @@ static LUA_FUNCTION(openssl_evp_digest_final)
     }
     raw = (lua_isnone(L, 3)) ? 0 : lua_toboolean(L, 3);
   }
+  else if (lua_gettop(L) >= 3)
+    raw = lua_toboolean(L, 3);
   else
     raw = (lua_isnone(L, 2)) ? 0 : lua_toboolean(L, 2);
 
@@ -659,9 +657,6 @@ int luaopen_digest(lua_State *L)
 
   lua_newtable(L);
   luaL_setfuncs(L, R, 0);
-  lua_pushliteral(L, "version");    /** version */
-  lua_pushliteral(L, MYVERSION);
-  lua_settable(L, -3);
 
   return 1;
 }

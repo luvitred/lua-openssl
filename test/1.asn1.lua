@@ -60,7 +60,6 @@ TestObject = {}
         assertEquals(txt, ln)
         assertEquals(o1:txt(false), txt)
 
-        assertErrorMsgContains('(need accept paramater)', asn1.new_object)
         local options = {
             oid ='1.2.840.10045.2.1.2.1',
             sn  ='gmsm21',
@@ -141,21 +140,30 @@ TestString = {}
     end
 
 TestTime = {}
+    function TestTime:get_timezone()
+        local now = os.time()
+        local gmt = os.time(os.date("!*t", now))
+        local tz =  os.difftime(now, gmt)
+        return tz
+    end
+
     function TestTime:setUp()
         self.time = os.time()
+        self.gmt = self.time-self:get_timezone()
     end
 
     function TestTime:testUTCTime()
         local at = openssl.asn1.new_utctime()
         assert(at:set(self.time))
-        local t1 = at:get(self.time)
-        assertEquals(self.time,t1)
+        local t1 = at:get()
+        assertEquals(self.gmt,t1)
     end
-    function TestTime:testUTCTime()
+
+    function TestTime:testGENERALIZEDTime()
         local at = openssl.asn1.new_generalizedtime()
         assert(at:set(self.time))
-        local t1 = at:get(self.time)
-        assertEquals(self.time,t1)
+        local t1 = at:get()
+        assertEquals(self.gmt, t1)
     end
 
 TestNumber = {}

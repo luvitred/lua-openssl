@@ -11,13 +11,6 @@ Sometime when you want to custome x509, you maybe need to use this.
 #include "openssl.h"
 #include "private.h"
 #include <openssl/asn1.h>
-#define MYNAME    "asn1"
-#define MYVERSION MYNAME " library for " LUA_VERSION " / Nov 2014 / "\
-  "based on OpenSSL " SHLIB_VERSION_NUMBER
-
-#ifdef WIN32
-#define timezone _timezone
-#endif
 
 static LuaL_Enumeration asn1_const[] =
 {
@@ -142,21 +135,34 @@ static int openssl_get_object(lua_State*L)
 {
   size_t l = 0;
   const char* asn1s = luaL_checklstring(L, 1, &l);
-  size_t off = posrelat(luaL_optinteger(L, 2, 1), l);
-  size_t length = posrelat(luaL_optinteger(L, 3, l), l);
+  size_t start = posrelat(luaL_optinteger(L, 2, 1), l);
+  size_t stop = posrelat(luaL_optinteger(L, 3, l), l);
 
-  const unsigned char *p = (const unsigned char *)asn1s + off - 1;
+  const unsigned char *p = (const unsigned char *)asn1s + start - 1;
   long len = 0;
   int tag = 0;
   int class = 0;
   int ret;
 
-  p = (const unsigned char *)asn1s + off - 1;
-  ret = ASN1_get_object(&p, &len, &tag, &class, length - off + 1);
+  if (start > l)
+  {
+    lua_pushnil(L);
+    openssl_pushargerror(L, 2, "out of range");
+    return 2;
+  }
+  if (start>stop)
+  {
+    lua_pushnil(L);
+    openssl_pushargerror(L, 3, "before of start");
+    return 2;
+  }
+
+  p = (const unsigned char *)asn1s + start - 1;
+  ret = ASN1_get_object(&p, &len, &tag, &class, stop - start + 1);
   if (ret & 0x80)
   {
     lua_pushnil(L);
-    lua_pushstring(L, "arg 1 with error encoding");
+    lua_pushstring(L, "arg #1 with error encoding");
     lua_pushinteger(L, ret);
     return 3;
   }
@@ -507,8 +513,13 @@ static int openssl_asn1object_new(lua_State* L)
     else
       luaL_argerror(L, 1, "create object fail");
   }
+  else if(lua_isnone(L, 1))
+  {
+    ASN1_OBJECT* obj = ASN1_OBJECT_new();
+    PUSH_OBJECT(obj, "openssl.asn1_object");
+  }
   else
-    luaL_argerror(L, 1, "need accept paramater");
+    luaL_argerror(L, 1, "need accept paramater or none");
 
   return 1;
 }
@@ -888,6 +899,46 @@ static int openssl_asn1object_dup(lua_State* L)
   return 1;
 }
 
+/***
+read der in to asn1_object
+
+@function d2i
+@treturn boolean
+*/
+static int openssl_asn1object_d2i(lua_State* L)
+{
+  size_t l;
+  ASN1_OBJECT* o = CHECK_OBJECT(1, ASN1_OBJECT, "openssl.asn1_object");
+  const unsigned char* p = (const unsigned char*) luaL_checklstring(L, 2, &l);
+
+  lua_pushboolean(L, d2i_ASN1_OBJECT(&o, &p, l)!=NULL);
+  return 1;
+}
+
+/***
+get der encoded of asn1_object
+
+@function i2d
+@treturn string
+*/
+static int openssl_asn1object_i2d(lua_State* L)
+{
+  ASN1_OBJECT* o = CHECK_OBJECT(1, ASN1_OBJECT, "openssl.asn1_object");
+  int ret = i2d_ASN1_OBJECT(o, NULL);
+  if (ret > 0)
+  {
+    unsigned char *p, *O;
+    p = O = OPENSSL_malloc(ret);
+    ret = i2d_ASN1_OBJECT(o, &p);
+    if (ret>0)
+      lua_pushlstring(L, (const char*)O, ret);
+    OPENSSL_free(O);
+  }
+  if (ret==0)
+    lua_pushnil(L);
+  return 1;
+}
+
 static luaL_Reg asn1obj_funcs[] =
 {
   {"nid",         openssl_asn1object_nid},
@@ -898,6 +949,8 @@ static luaL_Reg asn1obj_funcs[] =
   {"dup",         openssl_asn1object_dup},
   {"data",        openssl_asn1object_data},
   {"equals",      openssl_asn1object_equals},
+  {"d2i",         openssl_asn1object_d2i},
+  {"i2d",         openssl_asn1object_i2d},
 
   {"__eq",        openssl_asn1object_equals},
   {"__gc",        openssl_asn1object_free},
@@ -1030,8 +1083,7 @@ static int openssl_asn1group_get(lua_State *L)
   case V_ASN1_GENERALIZEDTIME:
   {
     ASN1_TIME *at = CHECK_OBJECT(1, ASN1_TIME, "openssl.asn1_time");
-    time_t offset = timezone;
-    time_t get = ASN1_TIME_get(at, -offset);
+    time_t get = ASN1_TIME_get(at, 0);
     lua_pushnumber(L, (lua_Number) get);
     return 1;
   }
@@ -1380,6 +1432,23 @@ static int openssl_asn1time_adj(lua_State* L)
   return 0;
 }
 
+#if !defined(LIBRESSL_VERSION_NUMBER)
+static int openssl_asn1time_diff(lua_State* L)
+{
+  int day, sec, ret;
+  ASN1_TIME *from = CHECK_OBJECT(1, ASN1_TIME, "openssl.asn1_time");
+  ASN1_TIME *to = lua_isnoneornil(L, 2) ? NULL
+                  : CHECK_OBJECT(2, ASN1_TIME, "openssl.asn1_time");
+
+  ret = ASN1_TIME_diff(&day, &sec, from, to);
+  if (ret==0)
+    return openssl_pushresult(L, ret);
+  lua_pushinteger(L, day);
+  lua_pushinteger(L, sec);
+  return 2;
+}
+#endif
+
 static luaL_Reg asn1str_funcs[] =
 {
   /* asn1string */
@@ -1409,6 +1478,9 @@ static luaL_Reg asn1str_funcs[] =
 
   /* asn1time,asn1generalizedtime */
   {"adj", openssl_asn1time_adj},
+#if !defined(LIBRESSL_VERSION_NUMBER)
+  {"diff", openssl_asn1time_diff},
+#endif
   {"check", openssl_asn1time_check},
 
   {NULL, NULL}
@@ -1416,7 +1488,6 @@ static luaL_Reg asn1str_funcs[] =
 
 int luaopen_asn1(lua_State *L)
 {
-  tzset();
   auxiliar_newclass(L, "openssl.asn1_object", asn1obj_funcs);
   auxiliar_newclass(L, "openssl.asn1_type", asn1type_funcs);
 
@@ -1430,10 +1501,6 @@ int luaopen_asn1(lua_State *L)
 
   lua_newtable(L);
   luaL_setfuncs(L, R, 0);
-
-  lua_pushliteral(L, "version");    /** version */
-  lua_pushliteral(L, MYVERSION);
-  lua_settable(L, -3);
 
   auxiliar_enumerate(L, -1, asn1_const);
 

@@ -1,12 +1,17 @@
 cmake_minimum_required(VERSION 2.8.9)
 project(lua-openssl C)
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules")
-option(BUILD_SHARED_LUA_OPENSSL "Shared or Static libluv" ON)
+set(CMAKE_MACOSX_RPATH 1)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules")
+option(BUILD_SHARED_LUA_OPENSSL "Shared or Static lua-openssl" ON)
 
 include(GNUInstallDirs)
 
-find_package(LuaJIT 2.0 REQUIRED)
+find_package(LuaJIT)
+if(NOT LUAJIT_FOUND)
+    find_package(Lua REQUIRED)
+endif()
 find_package(OpenSSL REQUIRED)
 
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
@@ -16,6 +21,10 @@ add_definitions(-DPTHREADS)
 
 if(BUILD_SHARED_LUA_OPENSSL)
     set(LUA_OPENSSL_LIBTYPE SHARED)
+    if(WIN32)
+        add_definitions(-DLUA_BUILD_AS_DLL)
+        set(EXTRA_LIBS "ws2_32.lib" "crypt32.lib")
+    endif()
 else()
     set(LUA_OPENSSL_LIBTYPE STATIC)
 endif()
@@ -64,24 +73,28 @@ add_library(lua-openssl ${LUA_OPENSSL_LIBTYPE}
 
 target_include_directories(lua-openssl PUBLIC
     ${OPENSSL_INCLUDE_DIR}
-    ${LUAJIT_INCLUDE_DIRS}
+    ${LUA_INCLUDE_DIRS}
     deps
-    deps/lua-compat
+    deps/lua-compat/c-api
     deps/auxiliar
 )
 
 target_link_libraries(lua-openssl PUBLIC
     ${OPENSSL_LIBRARIES}
-    ${LUAJIT_LIBRARIES}
+    ${LUA_LIBRARIES}
+    ${EXTRA_LIBS}
     Threads::Threads
 )
+
+target_compile_options(lua-openssl PRIVATE -DLUA_LIB)
 
 set_target_properties(lua-openssl PROPERTIES
     PREFIX ""
     OUTPUT_NAME "openssl"
-    VERSION 0.7.6.0 SOVERSION 1
+    VERSION 0.7.8.0 SOVERSION 1
 )
 
 install(TARGETS lua-openssl
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/lua/5.1
+    LIBRARY DESTINATION
+    ${CMAKE_INSTALL_LIBDIR}/lua/${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}
 )

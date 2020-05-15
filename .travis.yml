@@ -1,24 +1,26 @@
 language: c
 
-sudo: false
-
 dist: bionic
 
 env:
   global:
-    - LUAROCKS=3.0.3
+    - LUAROCKS=3.3.1
   matrix:
     - LUA=lua5.1
-    - LUA=lua5.1 SSL=openssl-1.0.2s
-    - LUA=lua5.2 SSL=libressl-2.9.2
-    - LUA=lua5.3 SSL=openssl-1.1.1c
-    - LUA=luajit SSL=openssl-1.1.0k
+    - LUA=lua5.1 SSL=openssl-1.0.2u
+    - LUA=lua5.2 SSL=libressl-3.0.2
+    - LUA=lua5.3 SSL=openssl-1.1.1g
+    - LUA=luajit SSL=openssl-1.1.0l
     - LUA=luajit2.1
 os:
   - linux
 
 matrix:
   allow_failures:
+    #    - env: LUA=lua5.2 SSL=libressl-2.8.3
+    #branches:
+    #  only:
+    #    - master
 
 before_install:
   - openssl version

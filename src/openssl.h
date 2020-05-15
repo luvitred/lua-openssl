@@ -58,8 +58,10 @@
 */
 
 /*                              MNNFFPPS  */
-#define LOPENSSL_VERSION_NUM  0x0070600f
-#define LOPENSSL_VERSION  "0.7.6"
+#define LOPENSSL_VERSION_NUM  0x0070800f
+#ifndef LOPENSSL_VERSION
+#define LOPENSSL_VERSION  "0.7.8"
+#endif
 
 #if OPENSSL_VERSION_NUMBER >= 0x10000000L
 #include <openssl/lhash.h>
@@ -84,10 +86,6 @@ __pragma(warning(pop))
 #include <time.h>
 #ifndef MAX_PATH
 #define MAX_PATH 260
-#endif
-
-#ifdef NETWARE
-#define timezone _timezone  /* timezone is called _timezone in LibC */
 #endif
 
 #ifdef WIN32

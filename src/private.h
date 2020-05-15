@@ -9,7 +9,7 @@ extern "C" {
 #include <lualib.h>
 
 #if LUA_VERSION_NUM < 503
-#include "c-api/compat-5.3.h"
+#include "compat-5.3.h"
 #endif
 
 #define luaL_checktable(L, n) luaL_checktype(L, n, LUA_TTABLE)
@@ -47,6 +47,11 @@ extern "C" {
 #define CONSTIFY_OPENSSL
 #endif
 #define CONSTIFY_X509_get0 CONSTIFY_OPENSSL
+
+#if OPENSSL_VERSION_NUMBER >= 0x1010100FL && !defined(OPENSSL_NO_EC) \
+  && !defined(LIBRESSL_VERSION_NUMBER)
+#define OPENSSL_SUPPORT_SM2
+#endif
 
 #define PUSH_BN(x)                                      \
   *(void **)(lua_newuserdata(L, sizeof(void *))) = (x); \
@@ -252,6 +257,9 @@ int openssl_sk_x509_algor_totable(lua_State *L, const STACK_OF(X509_ALGOR)* sk);
 int openssl_sk_x509_name_totable(lua_State *L, const STACK_OF(X509_NAME)* sk);
 
 X509_ATTRIBUTE* openssl_new_xattribute(lua_State*L, X509_ATTRIBUTE** a, int idx, const char* eprefix);
+
+int openssl_pusherror (lua_State *L, const char *fmt, ...);
+int openssl_pushargerror (lua_State *L, int arg, const char *extramsg);
 
 #if !defined(OPENSSL_NO_SRP)
 #if defined(LIBRESSL_VERSION_NUMBER) || OPENSSL_VERSION_NUMBER <= 0x10002000

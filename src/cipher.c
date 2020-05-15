@@ -8,10 +8,6 @@ cipher module for lua-openssl binding
 #include "openssl.h"
 #include "private.h"
 
-#define MYNAME    "cipher"
-#define MYVERSION MYNAME " library for " LUA_VERSION " / Nov 2014 / "\
-  "based on OpenSSL " SHLIB_VERSION_NUMBER
-
 /***
 list all support cipher algs
 
@@ -125,7 +121,7 @@ static LUA_FUNCTION(openssl_evp_encrypt)
         if ( ret == 1 )
         {
           output_len += len;
-          ret = EVP_EncryptFinal(c, (byte*)buffer + len, &len);
+          ret = EVP_EncryptFinal_ex(c, (byte*)buffer + len, &len);
           if (ret == 1)
           {
             output_len += len;
@@ -214,7 +210,7 @@ static LUA_FUNCTION(openssl_evp_decrypt)
         {
           output_len += len;
           len = input_len - len;
-          ret = EVP_DecryptFinal(c, (byte*)buffer + output_len, &len);
+          ret = EVP_DecryptFinal_ex(c, (byte*)buffer + output_len, &len);
           if (ret == 1)
           {
             output_len += len;
@@ -311,7 +307,7 @@ static LUA_FUNCTION(openssl_evp_cipher)
         {
           output_len += len;
           len = input_len + EVP_MAX_BLOCK_LENGTH - len;
-          ret = EVP_CipherFinal(c, (byte*)buffer + output_len, &len);
+          ret = EVP_CipherFinal_ex(c, (byte*)buffer + output_len, &len);
           if (ret == 1)
           {
             output_len += len;
@@ -1022,7 +1018,7 @@ static LuaL_Enumeration evp_ctrls_code[] =
   {"EVP_CTRL_AEAD_SET_MAC_KEY",               EVP_CTRL_AEAD_SET_MAC_KEY},
   {"EVP_CTRL_GCM_SET_IV_INV",                 EVP_CTRL_GCM_SET_IV_INV},
 
-#if !defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER >= 0x10002000L && !defined(LIBRESSL_VERSION_NUMBER)
   {"EVP_CTRL_TLS1_1_MULTIBLOCK_AAD",          EVP_CTRL_TLS1_1_MULTIBLOCK_AAD},
   {"EVP_CTRL_TLS1_1_MULTIBLOCK_ENCRYPT",      EVP_CTRL_TLS1_1_MULTIBLOCK_ENCRYPT},
   {"EVP_CTRL_TLS1_1_MULTIBLOCK_DECRYPT",      EVP_CTRL_TLS1_1_MULTIBLOCK_DECRYPT},
@@ -1039,9 +1035,6 @@ int luaopen_cipher(lua_State *L)
 
   lua_newtable(L);
   luaL_setfuncs(L, R, 0);
-  lua_pushliteral(L, "version");    /** version */
-  lua_pushliteral(L, MYVERSION);
-  lua_settable(L, -3);
   auxiliar_enumerate(L, -1, evp_ctrls_code);
 
   return 1;

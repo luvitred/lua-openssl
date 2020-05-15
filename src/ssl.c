@@ -10,10 +10,6 @@ ssl modules for lua-openssl binding, provide ssl function in lua.
 #include <stdint.h>
 #include "ssl_options.h"
 
-#define MYNAME    "ssl"
-#define MYVERSION MYNAME " library for " LUA_VERSION " / Nov 2014 / "\
-  "based on OpenSSL " SHLIB_VERSION_NUMBER
-
 #include <openssl/ssl.h>
 
 /***
@@ -48,6 +44,13 @@ typedef struct
   int tmp_ec_curve;
 #endif
 } openssl_ssl_ctx_lua;
+
+#if OPENSSL_VERSION_NUMBER < 0x10002000L
+static int SSL_is_server(const SSL *s)
+{
+  return s->server;
+}
+#endif
 
 static int openssl_ssl_ctx_new(lua_State*L)
 {
@@ -1472,7 +1475,7 @@ static int openssl_session_cache_mode(lua_State *L)
   return 1;
 }
 
-#if OPENSSL_VERSION_NUMBER > 0x10101000L && !defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER > 0x1010100FL && !defined(LIBRESSL_VERSION_NUMBER)
 static int openssl_ssl_ctx_num_tickets(lua_State*L)
 {
   SSL_CTX* ctx = CHECK_OBJECT(1, SSL_CTX, "openssl.ssl_ctx");
@@ -1507,7 +1510,7 @@ static luaL_Reg ssl_ctx_funcs[] =
   {"mode",            openssl_ssl_ctx_mode},
   {"timeout",         openssl_ssl_ctx_timeout},
   {"options",         openssl_ssl_ctx_options},
-#if OPENSSL_VERSION_NUMBER > 0x10101000L && !defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER > 0x1010100FL && !defined(LIBRESSL_VERSION_NUMBER)
   {"num_tickets",     openssl_ssl_ctx_num_tickets},
 #endif
   {"quiet_shutdown",  openssl_ssl_ctx_quiet_shutdown},
@@ -2621,10 +2624,6 @@ int luaopen_ssl(lua_State *L)
 
   lua_newtable(L);
   luaL_setfuncs(L, R, 0);
-
-  lua_pushliteral(L, "version");    /** version */
-  lua_pushliteral(L, MYVERSION);
-  lua_settable(L, -3);
 
   auxiliar_enumerate(L, -1, ssl_options);
   for (i = 0; sVerifyMode_Options[i]; i++)

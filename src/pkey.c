@@ -11,9 +11,11 @@ pkey module for lua-openssl binding
 #include <openssl/dsa.h>
 #include <openssl/engine.h>
 
-#define MYNAME    "pkey"
-#define MYVERSION MYNAME " library for " LUA_VERSION " / Nov 2014 / "\
-  "based on OpenSSL " SHLIB_VERSION_NUMBER
+#if defined(OPENSSL_SUPPORT_SM2)
+#ifndef SM2_DEFAULT_USERID
+#  define SM2_DEFAULT_USERID "1234567812345678"
+#endif
+#endif
 
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 #define EVP_CIPHER_CTX_reset EVP_CIPHER_CTX_init
@@ -737,7 +739,7 @@ static LUA_FUNCTION(openssl_pkey_new)
   {
     RSA* rsa = CHECK_OBJECT(1, RSA, "openssl.rsa");
     pkey = EVP_PKEY_new();
-    EVP_PKEY_assign_RSA(pkey, rsa);
+    EVP_PKEY_set1_RSA(pkey, rsa);
   }
 
   if (pkey && EVP_PKEY_id(pkey) != NID_undef)
@@ -1091,7 +1093,7 @@ LUA_FUNCTION(openssl_pkey_is_private1)
     luaL_error(L, "openssl.evp_pkey is not support");
   return 1;
 }
-/* private usage, and for sm2 */
+
 /***
 return public key
 @function get_public
@@ -1110,47 +1112,6 @@ static LUA_FUNCTION(openssl_pkey_get_public)
   }
   BIO_free(bio);
   return ret;
-}
-
-/* private useage, and for sm2 */
-static LUA_FUNCTION(openssl_ec_userId)
-{
-#ifndef OPENSSL_NO_ENGINE
-  EVP_PKEY* pkey = CHECK_OBJECT(1, EVP_PKEY, "openssl.evp_pkey");
-  ENGINE* engine = CHECK_OBJECT(2, ENGINE, "openssl.engine");
-  EC_KEY *ec = NULL;
-
-  int ret = 0;
-  if (!pkey || EVP_PKEY_type(EVP_PKEY_id(pkey)) != EVP_PKEY_EC
-      || (ec = EVP_PKEY_get0_EC_KEY(pkey)) == NULL )
-  {
-    luaL_argerror(L, 1, "only support EC key");
-  }
-  if (!engine)
-    luaL_argerror(L, 1, "EC key must have engine field");
-
-  if (lua_gettop(L) == 2)
-  {
-    ASN1_OCTET_STRING *s = ASN1_OCTET_STRING_new();
-    ret = ENGINE_ctrl(engine, 0x474554, 0x4944, ec, (void(*)(void))s);
-    if (ret == 1)
-      lua_pushlstring(L, (const char*) ASN1_STRING_get0_data(s), ASN1_STRING_length(s));
-    else
-      ret = openssl_pushresult(L, ret);
-    return ret;
-  }
-  else
-  {
-    ASN1_OCTET_STRING *s = ASN1_OCTET_STRING_new();
-    size_t l;
-    const char* data = luaL_checklstring(L, 3, &l);
-    ASN1_OCTET_STRING_set(s, (const unsigned char*) data, l);
-    ret = ENGINE_ctrl(engine, 0x534554, 0x4944, ec, (void(*)(void))s);
-    return openssl_pushresult(L, ret);
-#else
-  return 0;
-#endif
-  }
 }
 
 /***
@@ -1204,19 +1165,54 @@ static LUA_FUNCTION(openssl_dh_compute_key)
 sign message with private key
 @function sign
 @tparam string data data be signed
-@tparam[opt='SHA1'] string|env_digest md_alg default use sha-1
+@tparam[opt] string|env_digest md_alg default use sha256 or sm3 when pkey is SM2 type
+@tparam[opt='1234567812345678'] string userId used when pkey is SM2 type
 @treturn string signed message
 */
 static LUA_FUNCTION(openssl_sign)
 {
+  int ret;
   size_t data_len;
-  EVP_PKEY *pkey = CHECK_OBJECT(1, EVP_PKEY, "openssl.evp_pkey");
-  const char * data = luaL_checklstring(L, 2, &data_len);
-  int ret = 0;
-  EVP_MD_CTX *ctx = NULL;
+  const char *data;
+  const char *md_alg;
+  EVP_PKEY *pkey;
+  const EVP_MD *md;
+  EVP_MD_CTX *ctx;
 
-  const EVP_MD *md = get_digest(L, 3, "sha256");
+#if defined(OPENSSL_SUPPORT_SM2)
+  EVP_PKEY_CTX* pctx;
+  const char* userId = NULL;
+  size_t idlen = 0;
+  int is_SM2 = 0;
+#endif
+
+  pkey = CHECK_OBJECT(1, EVP_PKEY, "openssl.evp_pkey");
+  data = luaL_checklstring(L, 2, &data_len);
+
+  md_alg = "sha256";
+#if defined(OPENSSL_SUPPORT_SM2)
+  is_SM2 = EVP_PKEY_id(pkey)==EVP_PKEY_SM2;
+  if (is_SM2)
+    md_alg = "sm3";
+#endif
+
+  md = get_digest(L, 3, md_alg);
+
+#if defined(OPENSSL_SUPPORT_SM2)
+  if (is_SM2)
+    userId = luaL_optlstring (L, 4, SM2_DEFAULT_USERID, &idlen);
+#endif
+
   ctx = EVP_MD_CTX_create();
+#if defined(OPENSSL_SUPPORT_SM2)
+  if (is_SM2)
+  {
+    pctx = EVP_PKEY_CTX_new(pkey, NULL);
+    EVP_PKEY_CTX_set1_id(pctx, userId, idlen);
+    EVP_MD_CTX_set_pkey_ctx(ctx, pctx);;
+  }
+#endif
+
   ret = EVP_DigestSignInit(ctx, NULL, md, NULL, pkey);
   if (ret == 1)
   {
@@ -1257,19 +1253,56 @@ verify signed message with public key
 @function verify
 @tparam string data data be signed
 @tparam string signature signed result
-@tparam[opt='SHA1'] string|env_digest md_alg default use sha-1
+@tparam[opt] string|env_digest md_alg default use sha256 or sm3 when pkey is SM2 type
+@tparam[opt='1234567812345678'] string userId used when pkey is SM2 type
 @treturn boolean true for pass verify
 */
 static LUA_FUNCTION(openssl_verify)
 {
+  int ret;
   size_t data_len, signature_len;
-  EVP_PKEY *pkey = CHECK_OBJECT(1, EVP_PKEY, "openssl.evp_pkey");
-  const char* data = luaL_checklstring(L, 2, &data_len);
-  const char* signature = luaL_checklstring(L, 3, &signature_len);
-  const EVP_MD *md = get_digest(L, 4, "sha256");
-  EVP_MD_CTX *ctx = EVP_MD_CTX_create();
+  const char *data, *signature;
+  const char *md_alg;
+  EVP_PKEY *pkey;
+  const EVP_MD *md;
+  EVP_MD_CTX *ctx;
 
-  int ret = EVP_DigestVerifyInit(ctx, NULL, md, NULL, pkey);
+#if defined(OPENSSL_SUPPORT_SM2)
+  EVP_PKEY_CTX* pctx;
+  const char* userId = NULL;
+  size_t idlen = 0;
+  int is_SM2 = 0;
+#endif
+
+  pkey = CHECK_OBJECT(1, EVP_PKEY, "openssl.evp_pkey");
+  data = luaL_checklstring(L, 2, &data_len);
+  signature = luaL_checklstring(L, 3, &signature_len);
+
+  md_alg = "sha256";
+#if defined(OPENSSL_SUPPORT_SM2)
+  is_SM2 = EVP_PKEY_id(pkey)==EVP_PKEY_SM2;
+  if (is_SM2)
+    md_alg = "sm3";
+#endif
+
+  md = get_digest(L, 4, md_alg);
+
+#if defined(OPENSSL_SUPPORT_SM2)
+  if (is_SM2)
+    userId = luaL_optlstring (L, 5, SM2_DEFAULT_USERID, &idlen);
+#endif
+
+  ctx = EVP_MD_CTX_create();
+#if defined(OPENSSL_SUPPORT_SM2)
+  if (is_SM2)
+  {
+    pctx = EVP_PKEY_CTX_new(pkey, NULL);
+    EVP_PKEY_CTX_set1_id(pctx, userId, idlen);
+    EVP_MD_CTX_set_pkey_ctx(ctx, pctx);;
+  }
+#endif
+
+  ret = EVP_DigestVerifyInit(ctx, NULL, md, NULL, pkey);
   if (ret == 1)
   {
     ret = EVP_DigestVerifyUpdate(ctx, data, data_len);
@@ -1688,6 +1721,27 @@ static int openssl_pkey_bits(lua_State *L)
   return  1;
 };
 
+#if defined(OPENSSL_SUPPORT_SM2)
+static int openssl_pkey_as_sm2(lua_State *L)
+{
+  EVP_PKEY *pkey = CHECK_OBJECT(1, EVP_PKEY, "openssl.evp_pkey");
+  int type = EVP_PKEY_type(EVP_PKEY_id(pkey));
+  if(type==EVP_PKEY_EC)
+  {
+    const EC_KEY *ec = EVP_PKEY_get0_EC_KEY(pkey);
+    const EC_GROUP *grp = EC_KEY_get0_group(ec);
+    int curve = EC_GROUP_get_curve_name(grp);
+    if (curve==NID_sm2)
+    {
+      EVP_PKEY_set_alias_type(pkey, EVP_PKEY_SM2);
+      lua_pushboolean(L, 1);
+      return 1;
+    }
+  }
+  return luaL_argerror (L, 1, "must be EC key with SM2 curve");
+}
+#endif
+
 static luaL_Reg pkey_funcs[] =
 {
   {"is_private",    openssl_pkey_is_private1},
@@ -1706,7 +1760,10 @@ static luaL_Reg pkey_funcs[] =
   {"open",          openssl_open},
 
   {"compute_key",   openssl_dh_compute_key},
-  {"ec_userId",     openssl_ec_userId},
+
+#if defined(OPENSSL_SUPPORT_SM2)
+  {"as_sm2",        openssl_pkey_as_sm2},
+#endif
 
   {"__gc",          openssl_pkey_free},
   {"__tostring",    auxiliar_tostring},
@@ -1739,6 +1796,10 @@ static const luaL_Reg R[] =
   {"sign",          openssl_sign},
   {"verify",        openssl_verify},
 
+#if defined(OPENSSL_SUPPORT_SM2)
+  {"as_sm2",        openssl_pkey_as_sm2},
+#endif
+
   {"compute_key",   openssl_dh_compute_key},
 
   {NULL,  NULL}
@@ -1750,9 +1811,6 @@ int luaopen_pkey(lua_State *L)
 
   lua_newtable(L);
   luaL_setfuncs(L, R, 0);
-  lua_pushliteral(L, "version");    /** version */
-  lua_pushliteral(L, MYVERSION);
-  lua_settable(L, -3);
 
   return 1;
 }
