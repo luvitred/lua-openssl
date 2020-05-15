@@ -25,7 +25,10 @@ assert(objb)
 
 local function get_timezone()
   local now = os.time()
-  return os.difftime(now, os.time(os.date("!*t", now)))
+  local utcdate = os.date("!*t", now)
+  local localdate = os.date("*t", now)
+  localdate.isdst = false
+  return os.difftime(os.time(localdate), os.time(utcdate))
 end
 
 local function notAfter(a, b)
