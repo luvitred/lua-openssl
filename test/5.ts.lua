@@ -11,7 +11,10 @@ local objb = assert(asn1.new_object({oid='1.2.3.4.5.7',sn='1.2.3.4.5.7_sn',ln='1
 
 local function get_timezone()
     local now = os.time()
-    return os.difftime(now, os.time(os.date("!*t", now)))
+    local utcdate = os.date("!*t", now)
+    local localdate = os.date("*t", now)
+    localdate.isdst = false
+    return os.difftime(os.time(localdate), os.time(utcdate))
 end
 --[[
 typedef struct TS_req_st {
