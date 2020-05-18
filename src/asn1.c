@@ -1080,7 +1080,7 @@ static int openssl_asn1group_get(lua_State *L)
   case V_ASN1_GENERALIZEDTIME:
   {
     ASN1_TIME *at = CHECK_OBJECT(1, ASN1_TIME, "openssl.asn1_time");
-    time_t get = ASN1_TIME_get(at, 0);
+    time_t get = ASN1_TIME_get(at, -timezone);
     lua_pushnumber(L, (lua_Number) get);
     ret = 1;
     break;
