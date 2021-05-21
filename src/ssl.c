@@ -1196,6 +1196,35 @@ static int openssl_ssl_ctx_set_servername_callback(lua_State*L)
   return 0;
 }
 
+static void keylog_callback(const SSL *ssl, const char *line)
+{
+  SSL_CTX *ctx = SSL_get_SSL_CTX(ssl);
+  lua_State *L = SSL_CTX_get_app_data(ctx);
+
+  openssl_valueget(L, ctx, "keylog_callback");
+  if (lua_isfunction(L, -1))
+  {
+    lua_pushstring(L, line);
+    lua_call(L, 1, 0);
+  }
+}
+
+/***
+set TLS keylogging callback
+@function set_keylog_callback
+@tparam function keylog_callback
+*/
+static int openssl_ssl_ctx_set_keylog_callback(lua_State* L)
+{
+  SSL_CTX* ctx = CHECK_OBJECT(1, SSL_CTX, "openssl.ssl_ctx");
+  luaL_argcheck(L, lua_isfunction(L, 2), 2, "must be function");
+
+  lua_pushvalue(L, 2);
+  openssl_valueset(L, ctx, "keylog_callback");
+  SSL_CTX_set_keylog_callback(ctx, keylog_callback);
+  return 0;
+}
+
 /***
 set session callback
 @function set_session_callback
@@ -1531,6 +1560,7 @@ static luaL_Reg ssl_ctx_funcs[] =
   {"session_cache_mode",        openssl_session_cache_mode},
   {"set_session_callback",      openssl_ssl_ctx_set_session_callback},
   {"set_servername_callback",   openssl_ssl_ctx_set_servername_callback},
+  {"set_keylog_callback",       openssl_ssl_ctx_set_keylog_callback},
 
   {"__gc",            openssl_ssl_ctx_gc},
   {"__tostring",      auxiliar_tostring},
