@@ -47,6 +47,25 @@ endif
 OPENSSL_CFLAGS	?= $(shell $(PKG_CONFIG) openssl --cflags)
 OPENSSL_LIBS	?= $(shell $(PKG_CONFIG) openssl --static --libs)
 
+TARGET  = $(MAKECMDGOALS)
+ifeq (coveralls, ${TARGET})
+  CFLAGS	+=-g -fprofile-arcs -ftest-coverage
+  LDFLAGS	+=-g -fprofile-arcs
+endif
+
+ifeq (asan, ${TARGET})
+  ASAN_LIB       = /usr/local/opt/llvm/lib/clang/12.0.1/lib/darwin/libclang_rt.asan_osx_dynamic.dylib
+  CC             = clang
+  LD             = clang
+  CFLAGS	+=-g -O0 -fsanitize=address,undefined
+  LDFLAGS       +=-g -fsanitize=address
+endif
+
+ifeq (valgrind, ${TARGET})
+  CFLAGS	+=-g -O0
+  LDFLAGS	+=-g -O0
+endif
+
 ifneq (, $(findstring linux, $(SYS)))
   # Do linux things
   CFLAGS	+= -fPIC
@@ -55,9 +74,6 @@ endif
 
 ifneq (, $(findstring apple, $(SYS)))
   # Do darwin things
-  LUA_LIBT	 = $(subst -pagezero_size 10000 -image_base 100000000, , $(LUA_LIBS))
-  LUA_LIBS	 = $(LUA_LIBT)
-  LUA_LIBT	 =
   CFLAGS	+= -fPIC
   LDFLAGS	+= -fPIC -undefined dynamic_lookup -ldl
   MACOSX_DEPLOYMENT_TARGET="10.12"
@@ -88,7 +104,7 @@ endif
 LIBNAME= $T.so.$V
 
 CFLAGS		+= $(OPENSSL_CFLAGS) $(LUA_CFLAGS) $(TARGET_FLAGS)
-LDFLAGS		+= $(OPENSSL_LIBS) $(LUA_LIBS)
+LDFLAGS		+= $(OPENSSL_LIBS)
 # Compilation directives
 WARN_MIN	 = -Wall -Wno-unused-value -Wno-unused-function
 WARN		 = -Wall
@@ -103,7 +119,7 @@ OBJS=src/asn1.o deps/auxiliar/auxiliar.o src/bio.o src/cipher.o src/cms.o src/co
      src/x509.o src/xattrs.o src/xexts.o src/xname.o src/xstore.o src/xalgor.o         \
      src/callback.o src/srp.o deps/auxiliar/subsidiar.o
 
-.PHONY: all install test info doc
+.PHONY: all install test info doc coveralls asan
 
 .c.o:
 	$(CC) $(CFLAGS) -c -o $@ $?
@@ -131,6 +147,20 @@ info:
 
 test:	all
 	cd test && LUA_CPATH=../?.so $(LUA) test.lua && cd ..
+
+coveralls: test
+	coveralls -b . -i src --gcov-options '\-lp'
+
+valgrind: all
+	cd test && LUA_CPATH=../?.so \
+	valgrind --gen-suppressions=all --suppressions=../.github/lua-openssl.supp \
+	--error-exitcode=1 --leak-check=full --child-silent-after-fork=yes \
+	$(LUA) test.lua && cd ..
+
+asan: all
+	cd test && LUA_CPATH=../?.so \
+	DYLD_INSERT_LIBRARIES=$(ASAN_LIB) \
+	$(LUA) test.lua && cd ..
 
 clean:
 	rm -f $T.so lib$T.a $(OBJS)

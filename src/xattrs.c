@@ -49,7 +49,7 @@ static int openssl_xattr_new(lua_State*L)
   X509_ATTRIBUTE *x = NULL;
   luaL_checktable(L, 1);
 
-  x = openssl_new_xattribute(L, &x, 1, NULL);
+  x = openssl_new_xattribute(L, NULL, 1);
   PUSH_OBJECT(x, "openssl.x509_attribute");
   return 1;
 }
@@ -149,6 +149,12 @@ static int openssl_xattr_dup(lua_State*L)
 static int openssl_xattr_free(lua_State*L)
 {
   X509_ATTRIBUTE* attr = CHECK_OBJECT(1, X509_ATTRIBUTE, "openssl.x509_attribute");
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+  sk_ASN1_TYPE_pop_free(attr->value.set, ASN1_TYPE_free);
+  attr->value.ptr = NULL;
+#endif
+
   X509_ATTRIBUTE_free(attr);
   return 0;
 }
@@ -172,19 +178,15 @@ set type of x509_attribute
 static int openssl_xattr_data(lua_State*L)
 {
   X509_ATTRIBUTE* attr = CHECK_OBJECT(1, X509_ATTRIBUTE, "openssl.x509_attribute");
-  if (lua_type(L, 2) == LUA_TSTRING)
+  if (lua_type(L, 3) == LUA_TSTRING)
   {
     int attrtype = luaL_checkint(L, 2);
     size_t size;
     int ret;
     const char *data = luaL_checklstring(L, 3, &size);
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
-    if (X509_ATTRIBUTE_count(attr) == 1)
-      ASN1_TYPE_free((ASN1_TYPE*)attr->value.ptr);
-    else
-      sk_ASN1_TYPE_pop_free(attr->value.set, ASN1_TYPE_free);
+    sk_ASN1_TYPE_pop_free(attr->value.set, ASN1_TYPE_free);
     attr->value.ptr = NULL;
-#else
 #endif
     ret = X509_ATTRIBUTE_set1_data(attr, attrtype, data, size);
     return openssl_pushresult(L, ret);
@@ -215,12 +217,10 @@ static int openssl_xattr_type(lua_State*L)
   ASN1_TYPE *type = X509_ATTRIBUTE_get0_type(attr, loc);
   if (type)
   {
-    openssl_push_asn1type(L, type);;
+    openssl_push_asn1type(L, type);
     return 1;
   }
-  else
-    lua_pushnil(L);
-  return 1;
+  return 0;
 }
 
 /***
@@ -270,7 +270,7 @@ static luaL_Reg x509_attribute_funs[] =
   { NULL, NULL }
 };
 
-X509_ATTRIBUTE* openssl_new_xattribute(lua_State*L, X509_ATTRIBUTE** a, int idx, const char* eprefix)
+X509_ATTRIBUTE* openssl_new_xattribute(lua_State*L, X509_ATTRIBUTE** a, int idx)
 {
   int arttype;
   size_t len = 0;
@@ -280,28 +280,10 @@ X509_ATTRIBUTE* openssl_new_xattribute(lua_State*L, X509_ATTRIBUTE** a, int idx,
 
   lua_getfield(L, idx, "object");
   obj  = openssl_get_asn1object(L, -1, 1);
-  if (obj == NULL)
-  {
-    if (eprefix)
-    {
-      luaL_error(L, "%s field object is invalid value", eprefix);
-    }
-    else
-      luaL_argerror(L, idx, "field object is invalid value");
-  }
   lua_pop(L, 1);
 
   lua_getfield(L, idx, "type");
   arttype = luaL_checkint(L, -1);
-  if (arttype == V_ASN1_UNDEF || arttype == 0)
-  {
-    if (eprefix)
-    {
-      luaL_error(L, "%s field type is not invalid value", eprefix);
-    }
-    else
-      luaL_argerror(L, idx, "field type is not invalid value");
-  }
   lua_pop(L, 1);
 
   lua_getfield(L, idx, "value");
@@ -311,24 +293,8 @@ X509_ATTRIBUTE* openssl_new_xattribute(lua_State*L, X509_ATTRIBUTE** a, int idx,
   }
   else if ((s = GET_GROUP(-1, ASN1_STRING, "openssl.asn1group")) != NULL)
   {
-    if (ASN1_STRING_type(s) != arttype)
-    {
-      if (eprefix)
-        luaL_error(L, "%s field value not match type", eprefix);
-      else
-        luaL_argcheck(L, ASN1_STRING_type(s) == arttype, idx, "field value not match type");
-    }
     data = (const char *)ASN1_STRING_get0_data(s);
     len  = ASN1_STRING_length(s);
-  }
-  else
-  {
-    if (eprefix)
-    {
-      luaL_error(L, "%s filed value only accept string or asn1_string", eprefix);
-    }
-    else
-      luaL_argerror(L, idx, "filed value only accept string or asn1_string");
   }
   lua_pop(L, 1);
   if (data)

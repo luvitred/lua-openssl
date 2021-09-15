@@ -5,7 +5,7 @@ local ssl = require("ssl")
 
 local pass = "foobar"
 local cfg = {
-  protocol = "tlsv1",
+  protocol = ssl.default,
   mode = "client",
   key = "key.pem",
 }

@@ -1,6 +1,8 @@
-local openssl = require'openssl'
-local cms,csr = openssl.cms,openssl.x509.req
-local helper = require'helper'
+local lu = require 'luaunit'
+
+local openssl = require 'openssl'
+local cms, csr = openssl.cms, openssl.x509.req
+local helper = require 'helper'
 if not cms then
   print('Skip cms test')
   return
@@ -8,79 +10,121 @@ end
 
 TestCMS = {}
 
---need OpenSSL build with zlib support
---[[
-  function TestCMS:testCompress()
-    local msg = openssl.random(1000)
-    local cs = assert(cms.compress(msg, 'rle'))
-    local out = bio.mem()
-    local ret = assert(cms.uncompress (cs, msg, out))
-    assertEquals(msg, out:get_mem())
+-- need OpenSSL build with zlib support
+
+function TestCMS:testCompress()
+  local msg = openssl.random(1000)
+  local cs = cms.compress(msg, 'zlib')
+  if cs then
+    local ret = assert(cms.uncompress(cs))
+    lu.assertEquals(msg, ret)
   end
---]]
-    function TestCMS:setUp()
-        self.alg='sha1'
-        self.cadn = openssl.x509.name.new({{commonName='CA'},{C='CN'}})
-        self.alicedn = openssl.x509.name.new({{commonName='Alice'},{C='CN'}})
-        self.bobdn = openssl.x509.name.new({{commonName='Bob'},{C='CN'}})
+end
 
-        local cakey, cacert = helper.new_ca(self.cadn)
-        self.cakey, self.cacert = cakey, cacert
-        self.castore = openssl.x509.store.new({cacert})
+function TestCMS:setUp()
+  self.alg = 'sha1'
+  self.cadn = {{commonName = 'CA'},  {C = 'CN'}}
+  self.alicedn = {{commonName = 'Alice'},  {C = 'CN'}}
+  self.bobdn = {{commonName = 'Bob'},  {C = 'CN'}}
 
-        local pkey = openssl.pkey.new()
-        local req = assert(csr.new(self.alicedn, pkey))
-        local cert = openssl.x509.new(2,req)
-        cert:validat(os.time(), os.time() + 3600*24*365)
-        assert(cert:sign(cakey,cacert))
-        self.alice = {
-          key = pkey,
-          cert = cert
-        }
+  local ca = helper.get_ca()
 
-        pkey = openssl.pkey.new()
-        req = assert(csr.new(self.bobdn, pkey))
-        cert = openssl.x509.new(2,req)
-        cert:validat(os.time(), os.time() + 3600*24*365)
-        assert(cert:sign(cakey,cacert))
-        self.bob = {
-          key = pkey,
-          cert = cert
-        }
+  local req, pkey = helper.new_req(self.alicedn)
+  local cert = ca:sign(req)
+  self.alice = {key = pkey,  cert = cert}
 
-        self.msg = openssl.hex(openssl.random(128))
-        self.digest = 'sha1WithRSAEncryption'
-    end
+  cert, pkey = assert(helper.sign(self.bobdn))
+  self.bob = {key = pkey,  cert = cert}
 
-    function TestCMS:testEncrypt()
-        local recipts = {self.alice.cert}
-        local msg = assert(cms.encrypt(recipts, self.msg))
-        local smime = assert(cms.write(msg))
-        local ss = assert(cms.read(smime,'smime'))
-        local raw = assert(cms.decrypt(ss,self.alice.key, self.alice.cert))
-        assertEquals(raw,self.msg)
-    end
+  self.msg = openssl.hex(openssl.random(128))
+  self.digest = 'sha1WithRSAEncryption'
+  self.castore = assert(ca:get_store())
 
-    function TestCMS:testSign()
-        local c1 = assert(cms.sign(self.bob.cert, self.bob.key, self.msg, {}))
-        local smime = assert(cms.write(c1))
-        local msg = assert(cms.verify(c1, {self.bob.cert}, self.castore))
-        assertEquals(msg, self.msg)
-        msg = assert(cms.verify(c1, {}, self.castore))
-        assertEquals(msg, self.msg)
-    end
+  local c = cms.new()
+  assert(c)
+end
 
-    function TestCMS:testEncryptedData()
-        local key = openssl.random(24)
-        local c1 = assert(cms.EncryptedData_encrypt(self.msg, key))
-        local smime = assert(cms.write(c1))
-        local msg = assert(cms.EncryptedData_decrypt(c1, key))
-        assertEquals(msg, self.msg)
-    end
-    function TestCMS:testDigest()
-        local key = openssl.random(24)
-        local c1 = assert(cms.digest_create(self.msg))
-        local smime = assert(cms.write(c1))
-        local msg = assert(cms.digest_verify(c1))
-        assertEquals(msg, self.msg)
-    end
+function TestCMS:testEncrypt()
+  local opts = {
+    self.alice.cert,
+    key = "1234567890abcdef",
+    keyid = "aes-128-cbc",
+    password = 'secret'
+  }
+  local msg = assert(cms.encrypt(self.msg, opts))
+  local smime = assert(cms.export(msg))
+  local ss = assert(cms.read(smime, 'smime'))
+  local raw = assert(cms.decrypt(ss, self.alice.key, self.alice.cert, nil, 0, opts))
+  lu.assertEquals(raw, self.msg)
+end
+
+function TestCMS:testSign()
+  local c1 = assert(cms.sign(
+    self.bob.cert, self.bob.key, self.msg, {}))
+  assert(cms.export(c1))
+  local msg = assert(cms.verify(c1, {self.bob.cert}, self.castore))
+  lu.assertEquals(msg, self.msg)
+  msg = assert(cms.verify(c1, {}, self.castore))
+  lu.assertEquals(msg, self.msg)
+  assert(c1:signers()[1]==self.bob.cert)
+
+  --FIXME:
+  local rc = c1:sign_receipt(
+    self.bob.cert,
+    self.bob.key,
+    {self.alice.cert},
+    0)
+  if rc then
+    print(rc:signers())
+    assert(rc:verify_receipt(c1, {self.bob.cert}, self.castore, 0))
+  end
+end
+
+function TestCMS:testEncryptedData()
+  local key = openssl.random(16)
+  local c1 = assert(cms.EncryptedData_encrypt(self.msg, key))
+  assert(cms.export(c1))
+  local msg = assert(cms.EncryptedData_decrypt(c1, key))
+  lu.assertEquals(msg, self.msg)
+end
+
+function TestCMS:testDigest()
+  local key = openssl.random(24)
+  assert(key)
+  local c1 = assert(cms.digest_create(self.msg))
+  local smime = assert(cms.export(c1))
+  assert(smime)
+  local msg = assert(cms.digest_verify(c1))
+  lu.assertEquals(msg, self.msg)
+
+  c1 = assert(cms.digest(self.msg, "sha1"))
+  smime = assert(cms.export(c1))
+  assert(smime)
+  msg = assert(c1:verify())
+  lu.assertEquals(msg, self.msg)
+end
+
+function TestCMS:testData()
+  local c = cms.data("data")
+  assert(c)
+  assert(c:detached()==false)
+  assert(c:type())
+  assert(c:data()=='data')
+  assert(c:content()=='data')
+
+  local d = assert(c:export("data", 0, "der"))
+  d = cms.read(d, 'der')
+  assert(d)
+  d = assert(c:export("data", 0, "pem"))
+  d = cms.read(d, 'pem')
+  assert(d)
+  d = assert(c:export("data", 0, "smime"))
+  d = cms.read(d, 'smime')
+  assert(d)
+
+  assert(c:detached(true))
+  assert(c:detached() == true)
+  d = assert(c:export("data", 0, "der"))
+  assert(d)
+end
+

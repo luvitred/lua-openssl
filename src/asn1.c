@@ -303,7 +303,7 @@ static int openssl_asn1string_new(lua_State* L)
 {
   size_t size = 0;
   const char* data = luaL_checklstring(L, 1, &size);
-  int type = luaL_checkint(L, 2);
+  int type = luaL_optint(L, 2, V_ASN1_UTF8STRING);
   ASN1_STRING *s = ASN1_STRING_type_new(type);
   ASN1_STRING_set(s, data, size);
   PUSH_OBJECT(s, "openssl.asn1_string");
@@ -1004,17 +1004,32 @@ static int openssl_asn1group_set(lua_State *L)
     return openssl_pushresult(L, ret);
   }
   case V_ASN1_UTCTIME:
+  {
+    ASN1_TIME *a = CHECK_OBJECT(1, ASN1_TIME, "openssl.asn1_time");
+    if (lua_type(L, 2) == LUA_TNUMBER)
+    {
+      time_t t = luaL_checkinteger(L, 2);
+      ASN1_UTCTIME_set(a, t);
+    }
+    else if (lua_isstring(L, 2))
+    {
+      ret = ASN1_UTCTIME_set_string(a, lua_tostring(L, 2));
+    }
+    else
+      luaL_error(L, "only accpet number or string");
+    return openssl_pushresult(L, ret);
+  }
   case V_ASN1_GENERALIZEDTIME:
   {
     ASN1_TIME *a = CHECK_OBJECT(1, ASN1_TIME, "openssl.asn1_time");
     if (lua_type(L, 2) == LUA_TNUMBER)
     {
       time_t t = luaL_checkinteger(L, 2);
-      ASN1_TIME_set(a, t);
+      ASN1_GENERALIZEDTIME_set(a, t);
     }
     else if (lua_isstring(L, 2))
     {
-      ret = ASN1_TIME_set_string(a, lua_tostring(L, 2));
+      ret = ASN1_GENERALIZEDTIME_set_string(a, lua_tostring(L, 2));
     }
     else
       luaL_error(L, "only accpet number or string");
@@ -1423,13 +1438,28 @@ static int openssl_asn1time_check(lua_State* L)
 
 static int openssl_asn1time_adj(lua_State* L)
 {
-  ASN1_TIME *a = CHECK_OBJECT(1, ASN1_TIME, "openssl.asn1_time");
+  ASN1_TIME *at = CHECK_OBJECT(1, ASN1_TIME, "openssl.asn1_time");
   time_t t = luaL_checkinteger(L, 2);
   int offset_day = luaL_optint(L, 3, 0);
   long offset_sec = luaL_optlong(L, 4, 0);
 
-  ASN1_TIME_adj(a, t, offset_day, offset_sec);
-  return 0;
+  switch(at->type)
+  {
+  case V_ASN1_UTCTIME:
+  {
+    ASN1_UTCTIME *a = (ASN1_UTCTIME*)at;
+    ASN1_UTCTIME_adj(a, t, offset_day, offset_sec);
+    break;
+  }
+  case V_ASN1_GENERALIZEDTIME:
+  {
+    ASN1_GENERALIZEDTIME *a = (ASN1_UTCTIME*)at;
+    ASN1_GENERALIZEDTIME_adj(a, t, offset_day, offset_sec);
+    break;
+  }
+  }
+  lua_pushvalue(L, 1);
+  return 1;
 }
 
 #if !defined(LIBRESSL_VERSION_NUMBER)
@@ -1586,4 +1616,16 @@ int openssl_push_asn1(lua_State* L, const ASN1_STRING* string, int type)
   }
   }
 
+}
+
+int openssl_push_asn1integer_as_bn(lua_State *L, const ASN1_INTEGER* ai)
+{
+  if(ai!=NULL)
+  {
+    BIGNUM *bn;
+    bn = ASN1_INTEGER_to_BN(ai, NULL);
+    PUSH_OBJECT(bn, "openssl.bn");
+  } else
+    lua_pushnil(L);
+  return 1;
 }

@@ -1,10 +1,9 @@
 # Installation directories
 # System's libraries directory (where binary libraries are installed)
-LUA_LIBDIR= "d:\work\luabuild\bin\Win32Debug\clibs\"
 
 # Lua includes and lib
-LUA_INC= "c:\luajit-2.0\src"
-LUA_LIB= "c:\luajit-2.0\src\lua51.lib"
+LUA_INC= "c:\luajit\src"
+LUA_LIB= "c:\luajit\src\lua51.lib"
 
 # Openssl include and lib
 OPENSSL_INC="c:\openssl-win32\include"

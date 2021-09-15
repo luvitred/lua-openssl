@@ -1,7 +1,5 @@
 lua-openssl toolkit - A free, MIT-licensed OpenSSL binding for Lua.
 
-[![Build Status](https://travis-ci.org/luvitred/lua-openssl.svg)](https://travis-ci.org/luvitred/lua-openssl)
-
 # Index
 
 1. [Introduction](#introduction)
@@ -122,7 +120,7 @@ bn library:
 
 ### Version
 
-This lua-openssl toolkit works with Lua 5.1/5.2/5.3 or LuaJIT 2.0/2.1, and
+This lua-openssl toolkit works with Lua 5.1/5.2/5.3/5.4 or LuaJIT 2.0/2.1, and
 OpenSSL(0.9.8 or above 1.0.0) or LibreSSL(v2.8.x).
 
 It is recommended to use the most up-to-date OpenSSL version because of the

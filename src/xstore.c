@@ -19,17 +19,22 @@ static int openssl_xstore_new(lua_State*L)
 {
   X509_STORE* ctx = X509_STORE_new();
   int i, n;
-  luaL_checktable(L, 1);
-  n = lua_rawlen(L, 1);
-  for (i = 0; i < n; i++)
+
+  if (!lua_isnoneornil(L, 1))
   {
-    X509* x;
-    lua_rawgeti(L, 1, i + 1);
-    luaL_argcheck(L, auxiliar_getclassudata(L, "openssl.x509", -1), 1, "only contains x509 object");
-    x = CHECK_OBJECT(-1, X509, "openssl.x509");
-    lua_pop(L, 1);
-    X509_STORE_add_cert(ctx, x);
+    luaL_checktable(L, 1);
+    n = lua_rawlen(L, 1);
+    for (i = 0; i < n; i++)
+    {
+      X509* x;
+      lua_rawgeti(L, 1, i + 1);
+      luaL_argcheck(L, auxiliar_getclassudata(L, "openssl.x509", -1), 1, "only contains x509 object");
+      x = CHECK_OBJECT(-1, X509, "openssl.x509");
+      lua_pop(L, 1);
+      X509_STORE_add_cert(ctx, x);
+    }
   }
+
   if (!lua_isnoneornil(L, 2))
   {
     luaL_checktable(L, 2);
@@ -190,7 +195,15 @@ static int openssl_xstore_load(lua_State* L)
   int ret;
   if (file || dir)
   {
+#if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
+    ret = !(file == NULL && dir == NULL);
+    if (file != NULL)
+      ret = X509_STORE_load_file(ctx, file);
+    if (ret == 1 && dir != NULL)
+      ret = X509_STORE_load_path(ctx, dir);
+#else
     ret = X509_STORE_load_locations (ctx, file, dir);
+#endif
   }
   else
     ret = X509_STORE_set_default_paths(ctx);
@@ -219,20 +232,21 @@ static int openssl_xstore_add(lua_State* L)
       for (j = 1; j <= k; j++)
       {
         lua_rawgeti(L, i, j);
-        if (auxiliar_getclassudata(L, "openssl.x509", i))
+        if (auxiliar_getclassudata(L, "openssl.x509", -1))
         {
-          X509* x = CHECK_OBJECT(i, X509, "openssl.x509");
+          X509* x = CHECK_OBJECT(-1, X509, "openssl.x509");
           ret = X509_STORE_add_cert(ctx, x);
         }
-        else if (auxiliar_getclassudata(L, "openssl.x509_crl", i))
+        else if (auxiliar_getclassudata(L, "openssl.x509_crl", -1))
         {
-          X509_CRL* c = CHECK_OBJECT(i, X509_CRL, "openssl.x509_crl");
+          X509_CRL* c = CHECK_OBJECT(-1, X509_CRL, "openssl.x509_crl");
           ret = X509_STORE_add_crl(ctx, c);
         }
         else
         {
           luaL_argerror(L, i, "only accept table with x509 or x509_crl object");
         }
+        lua_pop(L, 1);
       }
     }
     else if (auxiliar_getclassudata(L, "openssl.x509", i))

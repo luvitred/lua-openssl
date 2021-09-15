@@ -192,12 +192,14 @@ static LUA_FUNCTION(openssl_error_string)
     lua_pushinteger(L, val);
     lua_pushstring (L, ERR_reason_error_string(val));
     lua_pushstring (L, ERR_lib_error_string   (val));
+    ret = 3;
+#if (OPENSSL_VERSION_NUMBER < 0x30000000L)
     lua_pushstring (L, ERR_func_error_string  (val));
+    ret++;
+#endif
 #ifdef ERR_FATAL_ERROR
     lua_pushboolean(L, ERR_FATAL_ERROR        (val));
-    ret = 5;
-#else
-    ret = 4;
+    ret++;
 #endif
   }
 
@@ -213,18 +215,21 @@ static LUA_FUNCTION(openssl_clear_error)
   return 0;
 }
 
-static LUA_FUNCTION(openssl_print_errors)
+static LUA_FUNCTION(openssl_errors)
 {
   BIO *out = BIO_new(BIO_s_mem());
   if(out)
   {
+    BUF_MEM* mem;
+
     ERR_print_errors(out);
-    PUSH_OBJECT(out, "openssl.bio");
+    BIO_get_mem_ptr(out, &mem);
+    lua_pushlstring(L, mem->data, mem->length);
+    BIO_free(out);
+
     return 1;
   }
-  lua_pushnil(L);
-  lua_pushstring(L, "out of memory");
-  return 2;
+  return 0;
 }
 
 /***
@@ -309,13 +314,11 @@ static int openssl_random_status(lua_State *L)
 get random bytes
 @function random
 @tparam number length
-@tparam[opt=false] boolean strong true to generate strong randome bytes
 @treturn string
 */
 static LUA_FUNCTION(openssl_random_bytes)
 {
   long length = luaL_checkint(L, 1);
-  int strong = lua_isnil(L, 2) ? 0 : lua_toboolean(L, 2);
 
   char *buffer = NULL;
   int ret = 0;
@@ -326,29 +329,14 @@ static LUA_FUNCTION(openssl_random_bytes)
   }
 
   buffer = malloc(length + 1);
-  if (strong)
+  ret = RAND_bytes((byte*)buffer, length);
+  if (ret == 1)
   {
-    ret = RAND_bytes((byte*)buffer, length);
-    if (ret == 1)
-    {
-      lua_pushlstring(L, buffer, length);
-    }
-    else
-    {
-      lua_pushboolean(L, 0);
-    }
+    lua_pushlstring(L, buffer, length);
   }
   else
   {
-    ret = RAND_bytes((byte*)buffer, length);
-    if (ret == 1)
-    {
-      lua_pushlstring(L, buffer, length);
-    }
-    else
-    {
-      lua_pushboolean(L, 0);
-    }
+    lua_pushboolean(L, 0);
   }
   free(buffer);
   return 1;
@@ -368,7 +356,7 @@ get FIPS mode
 */
 static int openssl_fips_mode(lua_State *L)
 {
-#if defined(LIBRESSL_VERSION_NUMBER)
+#if defined(LIBRESSL_VERSION_NUMBER) || (OPENSSL_VERSION_NUMBER >= 0x30000000L)
   return 0;
 #else
   int ret =0, on = 0;
@@ -426,7 +414,7 @@ static const luaL_Reg eay_functions[] =
 
   {"clear_error", openssl_clear_error},
   {"error",       openssl_error_string},
-  {"print_errors",openssl_print_errors},
+  {"errors",      openssl_errors},
   {"engine",      openssl_engine},
   {"FIPS_mode",   openssl_fips_mode},
 
@@ -451,7 +439,7 @@ static int luaclose_openssl(lua_State *L)
     return 0;
 
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
-#if !defined(LIBRESSL_VERSION_NUMBER)
+#if !defined(LIBRESSL_VERSION_NUMBER) && (OPENSSL_VERSION_NUMBER < 0x30000000L)
   FIPS_mode_set(0);
 #endif
 
@@ -484,6 +472,12 @@ static int luaclose_openssl(lua_State *L)
 
   CONF_modules_free();
   CONF_modules_unload(1);
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  OSSL_PROVIDER_unload("legacy");
+  OSSL_PROVIDER_unload("default");
+#endif
+
 #ifndef OPENSSL_NO_CRYPTO_MDEBUG
 #if !(defined(OPENSSL_NO_STDIO) || defined(OPENSSL_NO_FP_API))
 #if defined(LIBRESSL_VERSION_NUMBER) || OPENSSL_VERSION_NUMBER < 0x10101000L
@@ -523,17 +517,23 @@ LUALIB_API int luaopen_openssl(lua_State*L)
 #endif
 
 #ifndef OPENSSL_NO_ENGINE
-    ENGINE_load_dynamic();
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
     ENGINE_load_openssl();
+#else
+    OPENSSL_init_crypto(OPENSSL_INIT_ENGINE_OPENSSL, NULL);
+#endif
     ENGINE_load_builtin_engines();
 #endif
 #ifdef LOAD_ENGINE_CUSTOM
     LOAD_ENGINE_CUSTOM
 #endif
-#ifdef OPENSSL_SYS_WINDOWS
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#if defined(OPENSSL_SYS_WINDOWS) && OPENSSL_VERSION_NUMBER < 0x10100000L
     RAND_screen();
 #endif
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    OSSL_PROVIDER_load(NULL, "legacy");
+    OSSL_PROVIDER_load(NULL, "default");
 #endif
   }
 
@@ -563,6 +563,9 @@ LUALIB_API int luaopen_openssl(lua_State*L)
 
   luaopen_hmac(L);
   lua_setfield(L, -2, "hmac");
+
+  luaopen_hmac(L);
+  lua_setfield(L, -2, "mac");
 
   luaopen_pkey(L);
   lua_setfield(L, -2, "pkey");

@@ -1,31 +1,44 @@
-local openssl = require'openssl'
+local lu = require 'luaunit'
+
+local openssl = require 'openssl'
 local hmac = require'openssl'.hmac
 
 TestHMACCompat = {}
-    function TestHMACCompat:setUp()
-        self.msg='abcd'
-        self.alg='sha1'
-        self.key = 'abcdefg'
-    end
+function TestHMACCompat:setUp()
+  self.msg = 'abcd'
+  self.alg = 'sha1'
+  self.key = 'abcdefg'
+end
 
-    function TestHMACCompat:tearDown()
-    end
+function TestHMACCompat:tearDown()
+end
 
-    function TestHMACCompat:testDigest()
-        local a,b,c
-        a = hmac.hmac(self.alg,self.msg,self.key,true)
-        assertEquals(#a,20)
+function TestHMACCompat:testDigest()
+  local a, b, c
+  a = hmac.hmac(self.alg, self.msg, self.key, true)
+  lu.assertEquals(#a, 20)
 
-        b = hmac.hmac(self.alg,self.msg,self.key,false)
-        assertEquals(#b,40)
-        assertEquals(openssl.hex(a):lower(),b)
+  b = hmac.hmac(self.alg, self.msg, self.key, false)
+  lu.assertEquals(#b, 40)
+  lu.assertEquals(openssl.hex(a):lower(), b)
 
-        a = hmac.new(self.alg,self.key)
-        a:update(self.msg)
-        a = a:final()
-        assertEquals(a,b)
+  a = assert(hmac.new(self.alg, self.key))
+  assert(a:size()>0)
+  a:update(self.msg)
+  c = a:final()
+  lu.assertEquals(c, b)
 
-        c = hmac.new(self.alg,self.key)
-        c = c:final(self.msg)
-        assertEquals(c,b)
-    end
+  --FIXME:
+  --a = assert(hmac(self.alg, self.key, self.msg))
+  --lu.assertEquals(c, b)
+
+  a = assert(hmac.new(self.alg, self.key))
+  c = a:final(self.msg)
+  lu.assertEquals(c, b)
+
+  --FIXME:
+  --a:reset()
+  --a = assert(hmac.new(self.alg, self.key))
+  c = a:final(self.msg, true)
+  assert(c, openssl.hex(b))
+end

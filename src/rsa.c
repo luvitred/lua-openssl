@@ -30,6 +30,7 @@ static LUA_FUNCTION(openssl_rsa_isprivate)
   return 1;
 };
 
+#if (OPENSSL_VERSION_NUMBER < 0x30000000L)
 static LUA_FUNCTION(openssl_rsa_size)
 {
   RSA* rsa = CHECK_OBJECT(1, RSA, "openssl.rsa");
@@ -88,12 +89,12 @@ static LUA_FUNCTION(openssl_rsa_sign)
   RSA* rsa = CHECK_OBJECT(1, RSA, "openssl.rsa");
   size_t l;
   const unsigned char* msg = (const unsigned char *)luaL_checklstring(L, 2, &l);
-  int type = luaL_optint(L, 3, NID_md5_sha1);
+  const EVP_MD* md = get_digest(L, 3, "sha256");
   unsigned char* sig = OPENSSL_malloc(RSA_size(rsa));
   int flen = l;
   unsigned int slen = RSA_size(rsa);
 
-  int ret = RSA_sign(type, msg, flen, sig, &slen, rsa);
+  int ret = RSA_sign(EVP_MD_type(md), msg, flen, sig, &slen, rsa);
   if (ret == 1)
   {
     lua_pushlstring(L, (const char*)sig, slen);
@@ -111,13 +112,14 @@ static LUA_FUNCTION(openssl_rsa_verify)
   const unsigned char* from = (const unsigned char *)luaL_checklstring(L, 2, &l);
   size_t s;
   const unsigned char* sig = (const unsigned char *)luaL_checklstring(L, 3, &s);
-  int type = luaL_optint(L, 4, NID_md5_sha1);
+  const EVP_MD* md = get_digest(L, 4, "sha256");
   int flen = l;
   int slen = s;
 
-  int ret = RSA_verify(type, from, flen, sig, slen, rsa);
+  int ret = RSA_verify(EVP_MD_type(md), from, flen, sig, slen, rsa);
   return openssl_pushresult(L, ret);
 };
+#endif
 
 static LUA_FUNCTION(openssl_rsa_parse)
 {
@@ -132,8 +134,10 @@ static LUA_FUNCTION(openssl_rsa_parse)
 
 
   lua_newtable(L);
+#if (OPENSSL_VERSION_NUMBER < 0x30000000L)
   lua_pushinteger(L, RSA_size(rsa));
   lua_setfield(L, -2, "size");
+#endif
   lua_pushinteger(L, RSA_bits(rsa));
   lua_setfield(L, -2, "bits");
   OPENSSL_PKEY_GET_BN(n, n);
@@ -151,13 +155,11 @@ static LUA_FUNCTION(openssl_rsa_read)
 {
   size_t l;
   const char* data = luaL_checklstring(L, 1, &l);
+  int ispriv = lua_isnone(L, 2) ? 1 : lua_toboolean(L, 2);
   const unsigned char* in = (const unsigned char*)data;
-  RSA *rsa = d2i_RSAPrivateKey(NULL, &in, l);
-  if (rsa == NULL)
-  {
-    in = (const unsigned char*)data;
-    rsa = d2i_RSA_PUBKEY(NULL, &in, l);
-  }
+  RSA *rsa = ispriv ? d2i_RSAPrivateKey(NULL, &in, l)
+             : d2i_RSA_PUBKEY(NULL, &in, l);
+
   if (rsa)
     PUSH_OBJECT(rsa, "openssl.rsa");
   else
@@ -165,7 +167,32 @@ static LUA_FUNCTION(openssl_rsa_read)
   return 1;
 }
 
-static int openssl_rsa_set_method(lua_State *L)
+static LUA_FUNCTION(openssl_rsa_export)
+{
+  RSA* rsa = CHECK_OBJECT(1, RSA, "openssl.rsa");
+  int ispriv = lua_isnone(L, 2) ? is_private(rsa) : lua_toboolean(L, 2);
+  BIO* out = BIO_new(BIO_s_mem());
+
+  int ret = 0;
+  int len = ispriv ? i2d_RSAPrivateKey_bio(out, rsa)
+            : i2d_RSA_PUBKEY_bio(out, rsa);
+
+  if (len>0)
+  {
+    char * bio_mem_ptr;
+    long bio_mem_len;
+
+    bio_mem_len = BIO_get_mem_data(out, &bio_mem_ptr);
+
+    lua_pushlstring(L, bio_mem_ptr, bio_mem_len);
+    ret  = 1;
+  }
+  BIO_free(out);
+  return ret;
+}
+
+#if (OPENSSL_VERSION_NUMBER < 0x30000000L)
+static int openssl_rsa_set_engine(lua_State *L)
 {
 #ifndef OPENSSL_NO_ENGINE
   RSA* rsa = CHECK_OBJECT(1, RSA, "openssl.rsa");
@@ -179,17 +206,203 @@ static int openssl_rsa_set_method(lua_State *L)
 #endif
   return 0;
 }
+#endif
+
+static int openssl_rsa_generate_key(lua_State *L)
+{
+  int bits = luaL_optint(L, 1, 2048);
+  int e = luaL_optint(L, 2, 65537);
+  ENGINE *eng = lua_isnoneornil(L, 3) ? NULL : CHECK_OBJECT(3, ENGINE, "openssl.engine");
+  int ret = 0;
+
+  BIGNUM *E = BN_new();
+  RSA *rsa = eng ? RSA_new_method(eng) : RSA_new();
+  BN_set_word(E, e);
+
+  ret = RSA_generate_key_ex(rsa, bits, E, NULL);
+  if (ret==1)
+  {
+    PUSH_OBJECT(rsa, "openssl.rsa");
+  }
+  else
+  {
+    RSA_free(rsa);
+    ret = 0;
+  }
+
+  BN_free(E);
+  return ret;
+}
+
+static int openssl_pading_result(lua_State*L, unsigned long val)
+{
+    lua_pushnil(L);
+    if (val)
+    {
+      lua_pushstring(L, ERR_reason_error_string(val));
+      lua_pushinteger(L, val);
+    }
+    else
+    {
+      lua_pushstring(L, "UNKNOWN ERROR");
+      lua_pushnil(L);
+    }
+    return 3;
+}
+
+static int openssl_padding_add(lua_State *L)
+{
+  size_t l;
+  const unsigned char* from = (const unsigned char *) luaL_checklstring(L, 1, &l);
+  int padding = openssl_get_padding(L, 2, NULL);
+  int sz = luaL_checkinteger(L, 3);
+  unsigned char* to = OPENSSL_malloc(sz);
+  int ret = 0;
+
+  switch(padding)
+  {
+  case RSA_PKCS1_PADDING:
+  {
+    luaL_checktype(L, 4, LUA_TBOOLEAN);
+
+    /* true for private, false for public */
+    if (lua_toboolean(L, 4))
+    {
+      ret = RSA_padding_add_PKCS1_type_1(to, sz,from, l);
+    }
+    else
+    {
+      ret = RSA_padding_add_PKCS1_type_2(to, sz,from, l);
+    }
+
+    break;
+  }
+#ifdef RSA_SSLV23_PADDING
+  case RSA_SSLV23_PADDING:
+    ret = RSA_padding_add_SSLv23(to, sz,from, l);
+    break;
+#endif
+  case RSA_NO_PADDING:
+    ret = RSA_padding_add_none(to, sz,from, l);
+    break;
+  case RSA_PKCS1_OAEP_PADDING:
+  {
+    size_t pl;
+    const unsigned char* p = (const unsigned char *) luaL_optlstring(L, 4, NULL, &pl);
+    if (lua_isnone(L, 5))
+    {
+      ret = RSA_padding_add_PKCS1_OAEP(to, sz,from, l, p, pl);
+    }
+    else
+    {
+      const EVP_MD *md = get_digest(L, 5, NULL);
+      const EVP_MD *mgf1md = lua_isnone(L, 6) ? NULL : get_digest(L, 6, NULL);
+      ret = RSA_padding_add_PKCS1_OAEP_mgf1(to, sz,from, l, p, pl, md, mgf1md);
+    }
+    break;
+  }
+  case RSA_X931_PADDING:
+#if OPENSSL_VERSION_NUMBER > 0x10000000L
+  case RSA_PKCS1_PSS_PADDING:
+#endif
+  default:
+    break;
+  }
+  if (ret==1)
+  {
+    lua_pushlstring(L, (const char*)to, sz);
+  }
+  else
+  {
+    ret = openssl_pading_result(L, RSA_R_UNKNOWN_PADDING_TYPE);
+  }
+  OPENSSL_free(to);
+  return ret;
+}
+
+static int openssl_padding_check(lua_State *L)
+{
+  size_t l;
+  const unsigned char* from = (const unsigned char *) luaL_checklstring(L, 1, &l);
+  int padding = openssl_get_padding(L, 2, NULL);
+  int sz = luaL_checkinteger(L, 3);
+  unsigned char* to = OPENSSL_malloc(sz);
+  int ret = 0;
+
+  switch(padding)
+  {
+  case RSA_PKCS1_PADDING:
+  {
+    luaL_checktype(L, 4, LUA_TBOOLEAN);
+
+    /* true for private, false for public */
+    if (lua_toboolean(L, 4))
+    {
+      ret = RSA_padding_check_PKCS1_type_1(to, sz, from, l, sz);
+    }
+    else
+    {
+      ret = RSA_padding_check_PKCS1_type_2(to, sz, from, l, sz);
+    }
+    break;
+  }
+#ifdef RSA_SSLV23_PADDING
+  case RSA_SSLV23_PADDING:
+    ret = RSA_padding_check_SSLv23(to, sz, from, l, sz);
+    break;
+#endif
+  case RSA_PKCS1_OAEP_PADDING:
+  {
+    size_t pl;
+    const unsigned char* p = (const unsigned char *) luaL_optlstring(L, 4, NULL, &pl);
+    if (lua_isnone(L, 5))
+    {
+      ret = RSA_padding_check_PKCS1_OAEP(to, sz,from, l, sz, p, pl);
+    }
+    else
+    {
+      const EVP_MD *md = get_digest(L, 5, NULL);
+      const EVP_MD *mgf1md = lua_isnone(L, 6) ? NULL : get_digest(L, 6, NULL);
+      ret = RSA_padding_check_PKCS1_OAEP_mgf1(to, sz,from, l, sz, p, pl, md, mgf1md);
+    }
+    break;
+  }
+  case RSA_NO_PADDING:
+    ret = RSA_padding_check_none(to, sz, from, l, sz);
+    break;
+  case RSA_X931_PADDING:
+#if OPENSSL_VERSION_NUMBER > 0x10000000L
+  case RSA_PKCS1_PSS_PADDING:
+#endif
+  default:
+    break;
+  }
+  if (ret>0)
+  {
+    lua_pushlstring(L, (const char*)to, ret);
+    ret = 1;
+  }
+  else
+  {
+    ret = openssl_pading_result(L, RSA_R_PADDING_CHECK_FAILED);
+  }
+  OPENSSL_free(to);
+  return ret;
+}
 
 static luaL_Reg rsa_funs[] =
 {
   {"parse",       openssl_rsa_parse},
   {"isprivate",   openssl_rsa_isprivate},
+  {"export",      openssl_rsa_export},
+#if (OPENSSL_VERSION_NUMBER < 0x30000000L)
   {"encrypt",     openssl_rsa_encrypt},
   {"decrypt",     openssl_rsa_decrypt},
   {"sign",        openssl_rsa_sign},
   {"verify",      openssl_rsa_verify},
   {"size",        openssl_rsa_size},
-  {"set_method",  openssl_rsa_set_method},
+  {"set_engine",  openssl_rsa_set_engine},
+#endif
 
   {"__gc",        openssl_rsa_free},
   {"__tostring",  auxiliar_tostring},
@@ -201,12 +414,20 @@ static luaL_Reg R[] =
 {
   {"parse",       openssl_rsa_parse},
   {"isprivate",   openssl_rsa_isprivate},
+  {"export",      openssl_rsa_export},
+#if (OPENSSL_VERSION_NUMBER < 0x30000000L)
   {"encrypt",     openssl_rsa_encrypt},
   {"decrypt",     openssl_rsa_decrypt},
   {"sign",        openssl_rsa_sign},
   {"verify",      openssl_rsa_verify},
   {"size",        openssl_rsa_size},
+#endif
   {"read",        openssl_rsa_read},
+
+  {"generate_key", openssl_rsa_generate_key},
+
+  {"padding_add",   openssl_padding_add},
+  {"padding_check", openssl_padding_check},
 
   {NULL, NULL}
 };

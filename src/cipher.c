@@ -8,6 +8,10 @@ cipher module for lua-openssl binding
 #include "openssl.h"
 #include "private.h"
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#define EVP_CIPHER_CTX_reset EVP_CIPHER_CTX_init
+#endif
+
 /***
 list all support cipher algs
 
@@ -65,19 +69,7 @@ quick encrypt
 */
 static LUA_FUNCTION(openssl_evp_encrypt)
 {
-  const EVP_CIPHER* cipher = NULL;
-  if (lua_istable(L, 1))
-  {
-    if (lua_getmetatable(L, 1) && lua_equal(L, 1, -1))
-    {
-      lua_pop(L, 1);
-      lua_remove(L, 1);
-    }
-    else
-      luaL_error(L, "call function with invalid state");
-  }
-
-  cipher = get_cipher(L, 1, NULL);
+  const EVP_CIPHER* cipher  = get_cipher(L, 1, NULL);
   if (cipher)
   {
     size_t input_len = 0;
@@ -109,7 +101,7 @@ static LUA_FUNCTION(openssl_evp_encrypt)
       memcpy(evp_iv, iv, iv_len);
     }
 
-    EVP_CIPHER_CTX_init(c);
+    EVP_CIPHER_CTX_reset(c);
     ret = EVP_EncryptInit_ex(c, cipher, e, (const byte*)evp_key, iv_len > 0 ? (const byte*)evp_iv : NULL);
     if (ret == 1)
     {
@@ -131,7 +123,6 @@ static LUA_FUNCTION(openssl_evp_encrypt)
         OPENSSL_free(buffer);
       }
     }
-    EVP_CIPHER_CTX_cleanup(c);
     EVP_CIPHER_CTX_free(c);
     return (ret == 1) ? ret : openssl_pushresult(L, ret);
   }
@@ -154,19 +145,7 @@ quick decrypt
 */
 static LUA_FUNCTION(openssl_evp_decrypt)
 {
-  const EVP_CIPHER* cipher;
-  if (lua_istable(L, 1))
-  {
-    if (lua_getmetatable(L, 1) && lua_equal(L, 1, -1))
-    {
-      lua_pop(L, 1);
-      lua_remove(L, 1);
-    }
-    else
-      luaL_error(L, "call function with invalid state");
-  }
-
-  cipher = get_cipher(L, 1, NULL);
+  const EVP_CIPHER* cipher = get_cipher(L, 1, NULL);
   if (cipher)
   {
     size_t input_len = 0;
@@ -196,7 +175,7 @@ static LUA_FUNCTION(openssl_evp_decrypt)
       memcpy(evp_iv, iv, iv_len);
     }
 
-    EVP_CIPHER_CTX_init(c);
+    EVP_CIPHER_CTX_reset(c);
     ret = EVP_DecryptInit_ex(c, cipher, e, key ? (const byte*)evp_key : NULL, iv_len > 0 ? (const byte*)evp_iv : NULL);
     if (ret == 1)
     {
@@ -220,7 +199,6 @@ static LUA_FUNCTION(openssl_evp_decrypt)
         OPENSSL_free(buffer);
       }
     }
-    EVP_CIPHER_CTX_cleanup(c);
     EVP_CIPHER_CTX_free(c);
     return (ret == 1) ? ret : openssl_pushresult(L, ret);
   }
@@ -244,19 +222,7 @@ quick encrypt or decrypt
 */
 static LUA_FUNCTION(openssl_evp_cipher)
 {
-  const EVP_CIPHER* cipher = NULL;
-  if (lua_istable(L, 1))
-  {
-    if (lua_getmetatable(L, 1) && lua_equal(L, 1, -1))
-    {
-      lua_pop(L, 1);
-      lua_remove(L, 1);
-    }
-    else
-      luaL_error(L, "call function with invalid state");
-  }
-
-  cipher = get_cipher(L, 1, NULL);
+  const EVP_CIPHER* cipher = get_cipher(L, 1, NULL);
 
   if (cipher)
   {
@@ -292,7 +258,7 @@ static LUA_FUNCTION(openssl_evp_cipher)
       memcpy(evp_iv, iv, iv_len);
     }
 
-    EVP_CIPHER_CTX_init(c);
+    EVP_CIPHER_CTX_reset(c);
     ret = EVP_CipherInit_ex(c, cipher, e, (const byte*)evp_key, iv_len > 0 ? (const byte*)evp_iv : NULL, enc);
     if (ret == 1)
     {
@@ -317,7 +283,6 @@ static LUA_FUNCTION(openssl_evp_cipher)
         OPENSSL_free(buffer);
       }
     }
-    EVP_CIPHER_CTX_cleanup(c);
     EVP_CIPHER_CTX_free(c);
     return (ret == 1) ? ret : openssl_pushresult(L, ret);
   }
@@ -376,7 +341,7 @@ static LUA_FUNCTION(openssl_cipher_new)
       memcpy(evp_iv, iv, iv_len);
     }
     c = EVP_CIPHER_CTX_new();
-    EVP_CIPHER_CTX_init(c);
+    EVP_CIPHER_CTX_reset(c);
     if (!EVP_CipherInit_ex(c, cipher, e, key ? (const byte*)evp_key : NULL, iv_len > 0 ? (const byte*)evp_iv : NULL, enc))
     {
       luaL_error(L, "EVP_CipherInit_ex failed, please check openssl error");
@@ -431,7 +396,7 @@ static LUA_FUNCTION(openssl_cipher_encrypt_new)
       memcpy(evp_iv, iv, iv_len);
     }
     c = EVP_CIPHER_CTX_new();
-    EVP_CIPHER_CTX_init(c);
+    EVP_CIPHER_CTX_reset(c);
     ret = EVP_EncryptInit_ex(c, cipher, e,
                              key ? (const byte*)evp_key : NULL,
                              iv_len > 0 ? (const byte*)evp_iv : NULL);
@@ -491,7 +456,7 @@ static LUA_FUNCTION(openssl_cipher_decrypt_new)
       memcpy(evp_iv, iv, iv_len);
     }
     c = EVP_CIPHER_CTX_new();
-    EVP_CIPHER_CTX_init(c);
+    EVP_CIPHER_CTX_reset(c);
     ret = EVP_DecryptInit_ex(c, cipher, e,
                              key ? (const byte*)evp_key : NULL,
                              iv_len > 0 ? (const byte*)evp_iv : NULL);
@@ -665,11 +630,12 @@ static LUA_FUNCTION(openssl_evp_cipher_init)
 {
   EVP_CIPHER_CTX* c = CHECK_OBJECT(1, EVP_CIPHER_CTX, "openssl.evp_cipher_ctx");
   int ret;
-  CIPHER_MODE mode;
+  CIPHER_MODE mode = 0;
   size_t key_len = 0;
   const char *key = luaL_checklstring(L, 2, &key_len);
   size_t iv_len = 0;
   const char *iv = luaL_optlstring(L, 3, NULL, &iv_len); /* can be NULL */
+  int enc = lua_toboolean(L, 4);
 
   lua_rawgetp(L, LUA_REGISTRYINDEX, c);
   mode = lua_tointeger(L, -1);
@@ -689,7 +655,11 @@ static LUA_FUNCTION(openssl_evp_cipher_init)
   }
 
   ret = 0;
-  if (mode == DO_ENCRYPT)
+  if (mode == DO_CIPHER)
+    ret = EVP_CipherInit_ex(c, NULL, NULL,
+                            key ? (const byte*)evp_key : NULL,
+                            iv_len > 0 ? (const byte*)evp_iv : NULL, enc);
+  else if (mode == DO_ENCRYPT)
     ret = EVP_EncryptInit_ex(c, NULL, NULL,
                              key ? (const byte*)evp_key : NULL,
                              iv_len > 0 ? (const byte*)evp_iv : NULL);
@@ -937,7 +907,6 @@ static LUA_FUNCTION(openssl_cipher_ctx_free)
     return 0;
   lua_pushnil(L);
   lua_rawsetp(L, LUA_REGISTRYINDEX, ctx);
-  EVP_CIPHER_CTX_cleanup(ctx);
   EVP_CIPHER_CTX_free(ctx);
   FREE_OBJECT(1);
   return 0;
@@ -979,7 +948,6 @@ static luaL_Reg cipher_ctx_funs[] =
 
 static const luaL_Reg R[] =
 {
-  { "__call",  openssl_evp_cipher},
   { "list",    openssl_cipher_list},
   { "get",     openssl_cipher_get},
   { "encrypt", openssl_evp_encrypt},
