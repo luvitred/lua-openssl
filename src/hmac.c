@@ -421,11 +421,7 @@ static int openssl_mac_ctx_reset(lua_State *L)
   return 2;
 #else
   HMAC_CTX *c = CHECK_OBJECT(1, HMAC_CTX, "openssl.hmac_ctx");
-#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
-  int ret = HMAC_CTX_reset(c);
-#else
   int ret = HMAC_Init_ex(c, NULL, 0, NULL, NULL);
-#endif
 
   return openssl_pushresult(L, ret);
 #endif
