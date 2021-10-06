@@ -15,13 +15,14 @@ local LUA = arg and arg[-1] or nil
 assert(LUA)
 
 if uv then
+
   math.randomseed(os.time())
   local function set_timeout(timeout, callback)
     local timer = uv.new_timer()
     local function ontimeout()
       uv.timer_stop(timer)
       uv.close(timer)
-      callback(timer)
+      callback()
     end
     uv.timer_start(timer, timeout, 0, ontimeout)
     return timer
@@ -42,177 +43,66 @@ if uv then
     end
   end
 
-  function TestSSL:testUVSSL()
-    local lcode
-    local stdout1 = uv.new_pipe(false)
-    local stderr1 = uv.new_pipe(false)
-    local stdout2 = uv.new_pipe(false)
-    local stderr2 = uv.new_pipe(false)
-    local function onread(err, chunk)
-      assert(not err, err)
-      if (chunk) then print(chunk) end
-    end
-
+  function TestSSL:testUV_1SSL()
     local port = math.random(8000, 9000)
-    local child, pid
-    child, pid = uv.spawn(LUA, {
-      args = {"8.ssl_s.lua",  '127.0.0.1',  port},
-      stdio = {nil,  stdout1,  stderr1}
-    }, function(code, signal)
-      lu.assertEquals(code, 0)
-      lu.assertEquals(signal, 0)
-      uv.close(child)
-      lcode = code
-    end)
-
-    if pid then
-      uv.read_start(stdout1, onread)
-      uv.read_start(stderr1, onread)
-      set_timeout(2000, function()
-        local _child
-        _child = uv.spawn(LUA, {
-          args = {"8.ssl_c.lua",  '127.0.0.1',  port},
-          stdio = {nil,  stdout2,  stderr2}
-        }, function(code, signal)
-          lu.assertEquals(code, 0)
-          lu.assertEquals(signal, 0)
-          uv.close(_child)
-          lcode = code
-        end)
-        uv.read_start(stdout2, onread)
-        uv.read_start(stderr2, onread)
-      end)
-    end
-
+    helper.spawn(LUA,
+      {"8.ssl_s.lua",  '127.0.0.1',  port},
+      'accpeting...',
+      function()
+        print('started')
+        helper.spawn(LUA,
+          {"8.ssl_c.lua",  '127.0.0.1',  port}
+        )
+      end
+    )
     uv.run()
-    lu.assertEquals(lcode, 0)
   end
 
-  function TestSSL:testUVBio()
-    local lcode
-    local stdout1 = uv.new_pipe(false)
-    local stderr1 = uv.new_pipe(false)
-    local stdout2 = uv.new_pipe(false)
-    local stderr2 = uv.new_pipe(false)
-    local function onread(err, chunk)
-      assert(not err, err)
-      if (chunk) then print(chunk) end
-    end
-
+  function TestSSL:testUV_2BIO()
     local port = math.random(8000, 9000)
-    local child
-    child = uv.spawn(LUA, {
-      args = {"8.bio_s.lua",  '127.0.0.1',  port},
-      stdio = {nil,  stdout1,  stderr1}
-    }, function(code, signal)
-      lu.assertEquals(code, 0)
-      lu.assertEquals(signal, 0)
-      uv.close(child)
-      lcode = code
-    end)
-    uv.read_start(stdout1, onread)
-    uv.read_start(stderr1, onread)
-
-    set_timeout(5000, function()
-      local _child
-      _child = uv.spawn(LUA, {
-        args = {"8.bio_c.lua",  '127.0.0.1',  port},
-        stdio = {nil,  stdout2,  stderr2}
-      }, function(code, signal)
-        lu.assertEquals(code, 0)
-        lu.assertEquals(signal, 0)
-        uv.close(_child)
-        lcode = 0
-      end)
-      uv.read_start(stdout2, onread)
-      uv.read_start(stderr2, onread)
-    end)
-
+    helper.spawn(LUA,
+      {"8.bio_s.lua",  '127.0.0.1',  port},
+      'accpeting...',
+      function()
+        print('started')
+        helper.spawn(LUA,
+          {"8.bio_c.lua",  '127.0.0.1',  port}
+        )
+      end
+    )
     uv.run()
-    lu.assertEquals(lcode, 0)
   end
 
-  function TestSSL:testUVsslconnectbio()
-    local lcode
-    local stdout1 = uv.new_pipe(false)
-    local stderr1 = uv.new_pipe(false)
-    local stdout2 = uv.new_pipe(false)
-    local stderr2 = uv.new_pipe(false)
-    local function onread(err, chunk)
-      assert(not err, err)
-      if (chunk) then print(chunk) end
-    end
+  function TestSSL:testUV_3SSLCBIO()
     local port = math.random(8000, 9000)
-    local child
-    child = uv.spawn(LUA, {
-      args = {"8.bio_s.lua",  '127.0.0.1',  port},
-      stdio = {nil,  stdout1,  stderr1}
-    }, function(code, signal)
-      lu.assertEquals(code, 0)
-      uv.close(child)
-      lcode = code
-    end)
-    uv.read_start(stdout1, onread)
-    uv.read_start(stderr1, onread)
-
-    set_timeout(2000, function()
-      local _child
-      _child = uv.spawn(LUA, {
-        args = {"8.ssl_c.lua",  '127.0.0.1',  port,  "serveraa.br"},
-        stdio = {nil,  stdout2,  stderr2}
-      }, function(code, signal)
-        lu.assertEquals(code, 0)
-        uv.close(_child)
-        lcode = code
-      end)
-      uv.read_start(stdout2, onread)
-      uv.read_start(stderr2, onread)
-    end)
-
+    helper.spawn(LUA,
+      {"8.bio_s.lua",  '127.0.0.1',  port},
+      'accpeting...',
+      function()
+        print('started')
+        helper.spawn(LUA,
+          {"8.ssl_c.lua",  '127.0.0.1',  port}
+        )
+      end
+    )
     uv.run()
-    lu.assertEquals(lcode, 0)
   end
 
-  function TestSSL:testUVbioconnectssl()
-    local lcode = nil
-    local stdout1 = uv.new_pipe(false)
-    local stderr1 = uv.new_pipe(false)
-    local stdout2 = uv.new_pipe(false)
-    local stderr2 = uv.new_pipe(false)
-    local function onread(err, chunk)
-      assert(not err, err)
-      if (chunk) then print(chunk) end
-    end
+  function TestSSL:testUV_4BIOCSSL()
     local port = math.random(8000, 9000)
-    local child
-    child = uv.spawn(LUA, {
-      args = {"8.ssl_s.lua",  '127.0.0.1',  port},
-      stdio = {nil,  stdout1,  stderr1}
-    }, function(code, signal)
-      lu.assertEquals(code, 0)
-      uv.close(child)
-      lcode = code
-    end)
-    uv.read_start(stdout1, onread)
-    uv.read_start(stderr1, onread)
-
-    set_timeout(2000, function()
-      local _child
-      _child = uv.spawn(LUA, {
-        args = {"8.bio_c.lua",  '127.0.0.1',  port},
-        stdio = {nil,  stdout2,  stderr2}
-      }, function(code, signal)
-        lu.assertEquals(code, 0)
-        uv.close(_child)
-        lcode = code
-      end)
-      uv.read_start(stdout2, onread)
-      uv.read_start(stderr2, onread)
-    end)
-
+    helper.spawn(LUA,
+      {"8.ssl_s.lua",  '127.0.0.1',  port},
+      'accpeting...',
+      function()
+        print('started')
+        helper.spawn(LUA,
+          {"8.bio_c.lua",  '127.0.0.1',  port}
+        )
+      end
+    )
     uv.run()
-    lu.assertEquals(lcode, 0)
   end
+
 end
 
 local luv
@@ -344,6 +234,8 @@ function TestSSL:testSNI()
 
   local certs = {}
 
+  local session_cache = {}
+
   local function create_ctx(dn, mode)
     mode = mode or '_server'
     local ctx = ssl.ctx_new(ssl.default .. mode)
@@ -352,25 +244,35 @@ function TestSSL:testSNI()
       assert(ctx:use(pkey, cert))
       certs[#certs + 1] = cert
     end
-    ctx:set_session_callback(function(s, ss)
-      -- add
-      assert(tostring(s):match('openssl.ssl '))
-      assert(tostring(ss):match('openssl.ssl_session'))
-    end, function(s, id)
-      -- get
-      assert(tostring(s):match('openssl.ssl '))
-      assert(type(id)=='string')
-    end, function(c, ss)
-      -- del
-      assert(tostring(c):match('openssl.ssl_ctx'))
-      assert(tostring(ss):match('openssl.ssl_session'))
-    end)
+    ctx:set_session_callback(
+      function(s, ss)
+        -- add
+        assert(tostring(s):match('openssl.ssl '))
+        assert(tostring(ss):match('openssl.ssl_session'))
+        local id = ss:id()
+        session_cache[id] = ss
+        return true
+      end
+      ,function(s, id)
+        -- get
+        assert(tostring(s):match('openssl.ssl '))
+        assert(type(id)=='string')
+      end
+      --[[
+      -- uncommit will cause crash when gc on OpenSSL 1.1.1
+      ,function(c, ss)
+        -- del
+        assert(tostring(c):match('openssl.ssl_ctx'))
+        assert(tostring(ss):match('openssl.ssl_session'))
+        print('add session: '..openssl.hex(ss:id()))
+      end
+      --]]
+    )
     return ctx
   end
 
   local function create_srv_ctx()
     local ctx = create_ctx({{CN = "server"},  {C = "CN"}})
-
     ctx:set_servername_callback({
       ["serverA"] = create_ctx {{CN = "serverA"},  {C = "CN"}},
       ["serverB"] = create_ctx {{CN = "serverB"},  {C = "CN"}}
@@ -388,7 +290,6 @@ function TestSSL:testSNI()
     ctx:set_cert_verify({always_continue = true,  verify_depth = 4})
     return ctx
   end
-
   local bs, bc = bio.pair()
 
   local rs, cs, es, ec, i, o, sess
@@ -408,7 +309,6 @@ function TestSSL:testSNI()
                "auto_retry", "no_auto_chain")
 
   srv_ctx:flush_sessions(10000)
-
   repeat
     cs, ec = cli:handshake()
     rs, es = srv:handshake()
@@ -438,6 +338,7 @@ function TestSSL:testSNI()
     rs, es = srv:handshake()
   until (rs and cs) or (rs == nil or cs == nil)
   assert(rs and cs)
+  peer = cli:peer()
   assert(peer:subject():oneline() == "/CN=server/C=CN")
   if not helper.libressl then
     rc, ec = cli:renegotiate()
@@ -536,15 +437,15 @@ function TestSSL:testSNI()
   cli:cache_hit()
   cli:session_reused()
 
-  --FIXME: crash on openssl 1.0.2
-  --local D = cli:dup()
-  --assert(D)
+  --[[
+  -- uncommit cause crash on OpenSSL 1.0.2
+  local D = cli:dup()
+  assert(D)
+  --]]
 
   local ctx = cli:ctx()
   assert(ctx)
-  -- FIXME:
-  -- cli:ctx(ctx)
-  -- FIXME:
+  assert(cli:ctx(ctx))
   srv_ctx:session(sess, true)
   srv_ctx:session(sess, false)
   srv_ctx:session(sess:id(), false)

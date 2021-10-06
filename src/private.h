@@ -80,6 +80,7 @@ int EVP_PKEY_up_ref(EVP_PKEY *pkey);
 
 #include <openssl/ssl.h>
 int SSL_up_ref(SSL *s);
+int SSL_CTX_up_ref(SSL_CTX *ctx);
 int SSL_SESSION_up_ref(SSL_SESSION *s);
 
 DH *EVP_PKEY_get0_DH(EVP_PKEY *pkey);
@@ -261,7 +262,6 @@ int openssl_valueseti(lua_State*L, const void*p, int i);
 int openssl_valuegeti(lua_State*L, const void*p, int i);
 int openssl_valuesetp(lua_State*L, const void*p, const void*d);
 int openssl_valuegetp(lua_State*L, const void*p, const void*d);
-int openssl_refrence(lua_State*L, const void*p, int op);
 
 int openssl_verify_cb(int preverify_ok, X509_STORE_CTX *xctx);
 int openssl_cert_verify_cb(X509_STORE_CTX *xctx, void* u);
