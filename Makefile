@@ -54,7 +54,7 @@ ifeq (coveralls, ${TARGET})
 endif
 
 ifeq (asan, ${TARGET})
-  ASAN_LIB       = /usr/local/opt/llvm/lib/clang/12.0.1/lib/darwin/libclang_rt.asan_osx_dynamic.dylib
+  ASAN_LIB       = $(shell dirname $(shell dirname $(shell clang -print-libgcc-file-name)))/darwin/libclang_rt.asan_osx_dynamic.dylib
   CC             = clang
   LD             = clang
   CFLAGS	+=-g -O0 -fsanitize=address,undefined
@@ -106,8 +106,6 @@ ifeq (.config, $(wildcard .config))
   include .config
 endif
 
-LIBNAME= $T.so.$V
-
 CFLAGS		+= $(OPENSSL_CFLAGS) $(LUA_CFLAGS) $(TARGET_FLAGS)
 LDFLAGS		+= $(OPENSSL_LIBS)
 # Compilation directives
@@ -151,26 +149,29 @@ info:
 	@echo "PREFIX:" $(PREFIX)
 
 test:	all
-	cd test && LUA_CPATH=../?.so $(LUA) test.lua && cd ..
+	cd test && LUA_CPATH=$(shell pwd)/?.so $(shell which $(LUA)) test.lua && cd ..
 
 debug: all
 
 coveralls: test
-	coveralls -b . -i src --gcov-options '\-lp'
+ifeq ($(CI),)
+	lcov -c -d src -o ${T}.info
+	genhtml -o ${T}.html -t "${T} coverage" --num-spaces 2 ${T}.info
+endif
 
 valgrind: all
-	cd test && LUA_CPATH=../?.so \
+	cd test && LUA_CPATH=$(shell pwd)/?.so \
 	valgrind --gen-suppressions=all --suppressions=../.github/lua-openssl.supp \
 	--error-exitcode=1 --leak-check=full --child-silent-after-fork=yes \
 	$(LUA) test.lua && cd ..
 
 asan: all
 	export ASAN_LIB=$(ASAN_LIB) && \
-	cd test && LUA_CPATH=../?.so \
+	cd test && LUA_CPATH=$(shell pwd)/?.so \
 	DYLD_INSERT_LIBRARIES=$(ASAN_LIB) \
 	$(LUA) test.lua && cd ..
 
 clean:
-	rm -f $T.so lib$T.a $(OBJS)
+	rm -rf $T.* lib$T.a $(OBJS)
 
 # vim: ts=8 sw=8 noet

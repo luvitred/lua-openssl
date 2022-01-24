@@ -518,15 +518,8 @@ static int openssl_ecdsa_do_verify(lua_State*L)
     const char* s = luaL_checklstring(L, 3, &sigl);
     ECDSA_SIG* sig = d2i_ECDSA_SIG(NULL, (const unsigned char**)&s, sigl);
     ret = ECDSA_do_verify((const unsigned char*)dgst, l, sig, ec);
-    if (ret == -1)
-      ret = openssl_pushresult(L, -1);
-    else
-    {
-      lua_pushboolean(L, ret);
-      ret = 1;
-    }
     ECDSA_SIG_free(sig);
-    return ret;
+    ret = openssl_pushboolean(L, ret);
   }
   else
   {
@@ -535,16 +528,10 @@ static int openssl_ecdsa_do_verify(lua_State*L)
     ECDSA_SIG* sig = ECDSA_SIG_new();
     ECDSA_SIG_set0(sig, r, s);
     ret = ECDSA_do_verify((const unsigned char*)dgst, l, sig, ec);
-    if (ret == -1)
-      ret = openssl_pushresult(L, -1);
-    else
-    {
-      lua_pushboolean(L, ret);
-      ret = 1;
-    }
     ECDSA_SIG_free(sig);
-    return ret;
+    ret = openssl_pushboolean(L, ret);
   }
+  return ret;
 }
 
 #define SM2_SIG_MAX_LEN 72
@@ -598,14 +585,7 @@ static LUA_FUNCTION(openssl_ecdsa_verify)
   int type = EVP_MD_type(md);
 
   int ret = ECDSA_verify(type, dgst, (int)dgstlen, sig, (int)siglen, eckey);
-  if(ret==-1)
-    ret = openssl_pushresult(L, ret);
-  else
-  {
-    lua_pushboolean(L, ret);
-    ret = 1;
-  }
-  return ret;
+  return openssl_pushboolean(L, ret);
 }
 
 /* ec_point */
@@ -639,14 +619,15 @@ static int openssl_ec_key_parse(lua_State*L)
   const EC_GROUP* group = EC_KEY_get0_group(ec);
   const BIGNUM *priv = EC_KEY_get0_private_key(ec);
   lua_newtable(L);
+
+  AUXILIAR_SET(L, -1, "enc_flag", EC_KEY_get_enc_flags(ec), integer);
+  AUXILIAR_SET(L, -1, "conv_form", EC_KEY_get_conv_form(ec), integer);
+  AUXILIAR_SET(L, -1, "curve_name", EC_GROUP_get_curve_name(group), integer);
+
   if (basic)
   {
     BIGNUM* x = BN_new();
     BIGNUM* y = BN_new();
-
-    AUXILIAR_SET(L, -1, "enc_flag", EC_KEY_get_enc_flags(ec), integer);
-    AUXILIAR_SET(L, -1, "conv_form", EC_KEY_get_conv_form(ec), integer);
-    AUXILIAR_SET(L, -1, "curve_name", EC_GROUP_get_curve_name(group), integer);
 
     priv = BN_dup(priv);
     AUXILIAR_SETOBJECT(L, priv, "openssl.bn", -1, "d");
@@ -659,9 +640,6 @@ static int openssl_ec_key_parse(lua_State*L)
   }
   else
   {
-    AUXILIAR_SET(L, -1, "enc_flag", EC_KEY_get_enc_flags(ec), integer);
-    AUXILIAR_SET(L, -1, "conv_form", EC_KEY_get_conv_form(ec), integer);
-
     point = EC_POINT_dup(point, group);
     AUXILIAR_SETOBJECT(L, point, "openssl.ec_point", -1, "pub_key");
     group = EC_GROUP_dup(group);

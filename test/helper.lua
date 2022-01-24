@@ -5,6 +5,7 @@ local M = {}
 
 M.luaopensslv, M.luav, M.opensslv = openssl.version()
 M.libressl = M.opensslv:find("^LibreSSL")
+M.openssl3 = M.opensslv:find("^OpenSSL 3")
 
 function M.sslProtocol(srv, protocol)
   protocol = protocol or openssl.ssl.default
@@ -47,7 +48,11 @@ end
 function M.spawn(cmd, args, pattern, after_start, after_close, env)
   local uv = require("luv")
   env = env or {}
-  env['DYLD_INSERT_LIBRARIES'] = os.getenv('ASAN_LIB')
+  if os.getenv('ASAN_LIB') then
+    env[#env+1] = 'DYLD_INSERT_LIBRARIES=' .. os.getenv('ASAN_LIB')
+  end
+  env[#env+1] = 'LUA_CPATH=' .. package.cpath
+  env[#env+1] = 'LUA_PATH=' .. package.path
 
   local function stderr_read(err, chunk)
     assert(not err, err)
@@ -79,11 +84,12 @@ function M.spawn(cmd, args, pattern, after_start, after_close, env)
   local stderr = uv.new_pipe(false)
 
   local handle, pid
-  handle, pid = uv.spawn(
+  handle, pid = assert(uv.spawn(
     cmd,
     {
       args = args,
       env = env,
+      cwd = uv.cwd(),
       stdio = { stdin, stdout, stderr },
     },
     function(code, signal)
@@ -92,7 +98,7 @@ function M.spawn(cmd, args, pattern, after_start, after_close, env)
         after_close(code, signal)
       end
     end
-  )
+  ))
   uv.read_start(stdout, stdout_read)
   uv.read_start(stderr, stderr_read)
   return handle, pid

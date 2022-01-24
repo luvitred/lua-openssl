@@ -103,6 +103,36 @@ if uv then
     uv.run()
   end
 
+  function TestSSL:testUV_SSL4UV()
+    local port = math.random(8000, 9000)
+    helper.spawn(LUA,
+      {"8.ssl_uv_s.lua",  '127.0.0.1',  port},
+      'accpeting...',
+      function()
+        print('started')
+        helper.spawn(LUA,
+          {"8.bio_uv_c.lua",  '127.0.0.1',  port}
+        )
+      end
+    )
+    uv.run()
+  end
+
+  function TestSSL:testUV_DTLS()
+    local port = math.random(8000, 9000)
+    helper.spawn(LUA,
+      {"8.bio_dtls_s.lua",  '127.0.0.1',  port},
+      'accpeting...',
+      function()
+        print('started')
+        helper.spawn(LUA,
+          {"8.bio_dtls_c.lua",  '127.0.0.1',  port}
+        )
+      end
+    )
+    uv.run()
+  end
+
 end
 
 local luv
@@ -449,6 +479,19 @@ function TestSSL:testSNI()
   srv_ctx:session(sess, true)
   srv_ctx:session(sess, false)
   srv_ctx:session(sess:id(), false)
+
+  srv_ctx:quiet_shutdown(1)
+  assert(srv_ctx:quiet_shutdown()==1)
+  srv_ctx:verify_locations('certs/ca1-cert.pem')
+  assert(srv_ctx:cert_store())
+  assert(srv_ctx:verify_depth(9))
+  assert(srv_ctx:verify_mode())
+  srv_ctx:verify_mode(ssl.peer, function()
+    return true
+  end)
+
+  --FIXME:
+  --local dup = assert(cli:dup())
 
   local eng = openssl.engine('openssl')
   eng:load_ssl_client_cert(cli)

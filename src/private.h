@@ -252,6 +252,7 @@ int openssl_register_xextension(lua_State*L);
 int openssl_register_xstore(lua_State*L);
 int openssl_register_xalgor(lua_State*L);
 
+int openssl_pushboolean(lua_State *L, int result);
 int openssl_pushresult(lua_State*L, int result);
 
 int openssl_newvalue(lua_State*L, const void*p);
@@ -289,6 +290,12 @@ int openssl_pushargerror (lua_State *L, int arg, const char *extramsg);
 
 #ifdef HAVE_USER_CUSTOME
 #include HAVE_USER_CUSTOME
+#endif
+
+#if defined(OPENSSL_SUPPORT_SM2)
+#ifndef SM2_DEFAULT_USERID
+#  define SM2_DEFAULT_USERID "1234567812345678"
+#endif
 #endif
 
 #if defined(__cplusplus)

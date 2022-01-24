@@ -42,7 +42,7 @@ static int openssl_mac_is_a(lua_State *L)
 static void openssl_mac_names_do(const char *name, void *data)
 {
   lua_State *L = data;
-  int len = lua_objlen(L, -1);
+  int len = lua_rawlen(L, -1);
   lua_pushstring(L, name);
   lua_rawseti(L, -2, len+1);
 }
@@ -172,6 +172,7 @@ static int openssl_hmac_ctx_new(lua_State *L)
     PUSH_OBJECT(c, "openssl.mac_ctx");
   else
     ret = openssl_pushresult(L, ret);
+  EVP_MAC_free(mac);
 #else
   const EVP_MD *type = get_digest(L, 1, NULL);
   size_t l;
@@ -342,7 +343,7 @@ static int openssl_mac_ctx_final(lua_State *L)
   HMAC_CTX *c = CHECK_OBJECT(1, HMAC_CTX, "openssl.hmac_ctx");
 #endif
   unsigned char digest[EVP_MAX_MD_SIZE];
-  size_t len = 0;
+  size_t len = sizeof(digest);
   int raw = 0;
   int ret = 1;
 

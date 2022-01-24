@@ -23,8 +23,12 @@ The goal is to fully support openssl, include:
 - PKCS7/CMS.
 - SSL/TLS.
 
-Support backend include [OpenSSL](https://www.openssl.org/) and
-[LibreSSL](https://www.libressl.org/).
+This lua-openssl toolkit works with [Lua](https://www.lua.org/) 5.1/5.2/5.3/5.4 
+or [luajit](http://luajit.org/) 2.0/2.1, and [OpenSSL](https://www.openssl.org/) 
+0.9.8 or above 1.0.0 or [LibreSSL](https://www.libressl.org/).
+
+It is recommended to use the most up-to-date OpenSSL version because of the
+recent security fixes.
 
 Most of the lua-openssl functions require a key or certificate as argument, to
 make things easy to use OpenSSL.
@@ -44,8 +48,6 @@ digest, cipher, x509, pkcs7, cms and so on, be write as modules.
 ```lua
    local digest = require'openssl'.digest
    local cipher = require'openssl'.cipher
-   local crypto = require'crypto'
-   local ssl    = require'ssl'
 ```
 
 digest() equals with digest.digest(), same cipher() equals with cipher.cipher().
@@ -119,12 +121,6 @@ bn library:
 ```
 
 ### Version
-
-This lua-openssl toolkit works with Lua 5.1/5.2/5.3/5.4 or LuaJIT 2.0/2.1, and
-OpenSSL(0.9.8 or above 1.0.0) or LibreSSL(v2.8.x).
-
-It is recommended to use the most up-to-date OpenSSL version because of the
-recent security fixes.
 
 You can get version of lua-openssl, lua and OpenSSL from a Lua script.
 
@@ -341,7 +337,7 @@ For more examples, please see test lua script file.
 
 **_lua-openssl License_**
 
-Copyright (c) 2011 - 2014 zhaozg, zhaozg(at)gmail.com
+Copyright (c) 2011 - 2022 zhaozg, zhaozg(at)gmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to

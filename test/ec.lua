@@ -45,7 +45,7 @@ function TestEC:TestEC()
   assert(not k1:is_private())
   t = k1:parse()
   assert(t.bits == 256)
-  assert(t.type == 'ec')
+  assert(t.type == 'EC')
   assert(t.size == 72)
   local r = t.ec
   t = r:parse(true) -- make basic table
@@ -73,7 +73,7 @@ function TestEC:TestEC()
   assert(ec2priv:is_private())
 end
 
-function TestEC:TestEC2()
+function TestEC:TestPrime256v1()
   local nec = {'ec',  'prime256v1'}
   local key1 = pkey.new(unpack(nec))
   local key2 = pkey.new(unpack(nec))
@@ -94,15 +94,20 @@ function TestEC:TestEC2()
 end
 
 if openssl.ec then
-  function TestEC:TestEC2()
-    local lc = openssl.ec.list()
-    assert(type(lc)=='table')
-    local grp, pnt = openssl.ec.group('prime256v1', "uncompressed", "named_curve")
-    assert(grp:asn1_flag() == 'named_curve')
-    assert(grp:point_conversion_form() == 'uncompressed')
+  local function ECConversionForm(form, flag)
+    local grp, pnt = openssl.ec.group('prime256v1', form, flag)
+    assert(grp:asn1_flag() == flag)
+    assert(grp:point_conversion_form() == form)
 
     local oct = grp:point2oct(pnt)
-    assert(#oct==65)
+    if form=='uncompressed' or form=='hybrid' then
+      assert(#oct==65)
+    elseif form == 'compressed' then
+      assert(#oct==33)
+    else
+      error(form)
+    end
+
     local pnt1 = grp:oct2point(oct)
     assert(grp:point_equal(pnt, pnt1))
 
@@ -138,7 +143,9 @@ if openssl.ec then
     local ec1 = openssl.ec.read(der)
     assert(ec1:set_method(openssl.engine('openssl')))
     assert(ec1:conv_form('hybrid'))
+    assert(ec1:conv_form()=='hybrid')
     assert(ec1:enc_flags('explicit'))
+    assert(ec1:enc_flags()=='explicit')
     assert(ec1:check())
     assert(ec1:export())
 
@@ -167,6 +174,17 @@ if openssl.ec then
     grp:affine_coordinates(pnt, openssl.bn.text(factor.x), openssl.bn.text(factor.y))
     pnt1:copy(pnt)
     assert(grp:point_equal(pnt, pnt1))
+  end
+
+  function TestEC:TestConversionForm()
+    local lc = openssl.ec.list()
+    assert(type(lc)=='table')
+    ECConversionForm("uncompressed", "named_curve")
+    ECConversionForm("uncompressed", "explicit")
+    ECConversionForm("compressed", "named_curve")
+    ECConversionForm("compressed", "explicit")
+    ECConversionForm("hybrid", "named_curve")
+    ECConversionForm("hybrid", "explicit")
   end
 end
 
