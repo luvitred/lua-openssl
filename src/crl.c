@@ -101,9 +101,9 @@ static int reason_get(lua_State*L, int reasonidx)
 static int openssl_x509_revoked_get_reason(X509_REVOKED *revoked)
 {
   int crit = 0;
-  int reason;
+  int reason = 0;
   ASN1_ENUMERATED *areason = X509_REVOKED_get_ext_d2i(revoked, NID_crl_reason, &crit, NULL);
-  reason = (crit == -1) ? CRL_REASON_NONE : ASN1_ENUMERATED_get(areason);
+  //reason = (crit == -1) ? CRL_REASON_NONE : ASN1_ENUMERATED_get(areason);
   ASN1_ENUMERATED_free(areason);
   return reason;
 }
@@ -733,22 +733,6 @@ static LUA_FUNCTION(openssl_crl_diff)
     lua_pushnil(L);
   return 1;
 }
-
-/***
-check x509_crl with evp_pkey
-@function check
-@tparam evp_pkey pkey
-@tparam[opt=0] integer flags
-@treturn boolean result true for pass
-*/
-static LUA_FUNCTION(openssl_crl_check)
-{
-  X509_CRL *crl = CHECK_OBJECT(1, X509_CRL, "openssl.x509_crl");
-  EVP_PKEY* pkey = CHECK_OBJECT(2, EVP_PKEY, "openssl.evp_pkey");
-  unsigned long flags = luaL_optinteger(L, 3, X509_V_FLAG_SUITEB_128_LOS);
-  int ret  =  X509_CRL_check_suiteb(crl, pkey, flags);
-  return openssl_pushresult(L, ret == X509_V_OK);
-}
 #endif
 
 /***
@@ -801,10 +785,17 @@ static LUA_FUNCTION(openssl_crl_parse)
     const X509_ALGOR *sig_alg = NULL;
 
     X509_CRL_get0_signature(crl, &sig, &alg);
-    PUSH_OBJECT(sig_alg, "openssl.x509_algor");
-    lua_setfield(L, -2, "sig_alg");
-    PUSH_ASN1_STRING(L, sig);
-    lua_setfield(L, -2, "signature");
+    if (alg != NULL && OBJ_obj2nid(alg->algorithm)!=NID_undef)
+    {
+      PUSH_OBJECT(sig_alg, "openssl.x509_algor");
+      lua_setfield(L, -2, "sig_alg");
+    }
+
+    if (sig != NULL && sig->length > 0)
+    {
+      PUSH_ASN1_STRING(L, sig);
+      lua_setfield(L, -2, "signature");
+    }
   }
   {
     ASN1_INTEGER *crl_number = X509_CRL_get_ext_d2i(crl, NID_crl_number, NULL, NULL);
@@ -974,7 +965,6 @@ static luaL_Reg crl_funcs[] =
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined (LIBRESSL_VERSION_NUMBER)
   {"diff",            openssl_crl_diff},
-  {"check",           openssl_crl_check},
 #endif
 
   /* set and get */

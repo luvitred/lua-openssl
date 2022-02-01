@@ -63,13 +63,10 @@ function TestCRL:testNew()
   assert(other:sign(ca.pkey, ca.cacert:issuer()))
   assert(other:verify(ca.cacert))
   assert(other:verify(ca.pkey))
-  if (other.check) then
-    -- FIXME:
-    --assert(other:check(ca.pkey))
-  end
 
   assert(other:export())
   local info = other:parse()
+
   assert(type(info.revoked)=='table')
   assert(type(info.extensions)=='table')
   local t = other:get(0, true)

@@ -1390,11 +1390,13 @@ static SSL_SESSION *openssl_get_session(SSL *ssl,
     *do_copy = 0;
     session = d2i_SSL_SESSION(NULL, &p, (int)size);
   }
-  else
+  else if ((session = GET_OBJECT(-1, SSL_SESSION, "openssl.ssl_session")) != NULL)
   {
     *do_copy = 1;
-    session = CHECK_OBJECT(-1, SSL_SESSION, "openssl.ssl_session");
-    SSL_SESSION_up_ref(session);
+  }
+  else if (lua_type(L, -1) != LUA_TNIL) {
+    fprintf(stderr, "get session callback return unaccpet value: (type=%s)%s\n",
+            luaL_typename(L, -1),lua_tostring(L, -1));
   }
   lua_pop(L, 1);
   return session;
@@ -1403,16 +1405,16 @@ static SSL_SESSION *openssl_get_session(SSL *ssl,
 static void openssl_del_session(SSL_CTX *ctx, SSL_SESSION *session)
 {
   int ret;
+  unsigned int len = 0;;
+  const unsigned char* id = NULL;
   lua_State *L = SSL_CTX_get_app_data(ctx);
 
   openssl_valuegeti(L, ctx, SSL_CTX_SESSION_DEL);
-  SSL_CTX_up_ref(ctx);
-  PUSH_OBJECT(ctx, "openssl.ssl_ctx");
-  openssl_newvalue(L, ctx);
-  SSL_SESSION_up_ref(session);
-  PUSH_OBJECT(session, "openssl.ssl_session");
 
-  ret = lua_pcall(L, 2, 0, 0);
+  id = SSL_SESSION_get_id(session, &len);
+  lua_pushlstring(L, (const char*)id, len);
+
+  ret = lua_pcall(L, 1, 0, 0);
   if (ret != LUA_OK)
   {
     fprintf(stderr, "del session callback error: %s\n", lua_tostring(L, -1));
@@ -1499,8 +1501,6 @@ set session cache mode,and return old mode
 @tparam string mode support 'no_auto_clear','server','client','both','off',
 'no_auto_clear' can be combine with others, so accept one or two param.
 */
-#if OPENSSL_VERSION_NUMBER > 0x10100000L
-#endif
 static int openssl_session_cache_mode(lua_State *L)
 {
   static const char* smode[] =
@@ -1553,49 +1553,50 @@ static int openssl_session_cache_mode(lua_State *L)
   {
     mode = SSL_CTX_get_session_cache_mode(ctx);
   };
+
   lua_newtable(L);
   i = 0;
   if (mode == SSL_SESS_CACHE_OFF )
   {
     lua_pushstring(L, "off");
-    lua_rawseti(L, -2, i++);
+    lua_rawseti(L, -2, ++i);
   }
   else
   {
     if (mode & SSL_SESS_CACHE_NO_AUTO_CLEAR)
     {
       lua_pushstring(L, "no_auto_clear");
-      lua_rawseti(L, -2, i++);
+      lua_rawseti(L, -2, ++i);
     }
-    if (mode & SSL_SESS_CACHE_BOTH)
+    if ((mode & SSL_SESS_CACHE_BOTH)==SSL_SESS_CACHE_BOTH)
     {
       lua_pushstring(L, "both");
-      lua_rawseti(L, -2, i++);
+      lua_rawseti(L, -2, ++i);
     }
     else if (mode & SSL_SESS_CACHE_SERVER)
     {
       lua_pushstring(L, "server");
-      lua_rawseti(L, -2, i++);
+      lua_rawseti(L, -2, ++i);
     }
     else if (mode & SSL_SESS_CACHE_CLIENT)
     {
       lua_pushstring(L, "client");
-      lua_rawseti(L, -2, i++);
+      lua_rawseti(L, -2, ++i);
     }
-    if (mode & SSL_SESS_CACHE_NO_INTERNAL)
+    if ((mode & SSL_SESS_CACHE_NO_INTERNAL)==SSL_SESS_CACHE_NO_INTERNAL)
     {
       lua_pushstring(L, "no_internal");
-      lua_rawseti(L, -2, i++);
+      lua_rawseti(L, -2, ++i);
     }
     else if (mode & SSL_SESS_CACHE_NO_INTERNAL_LOOKUP)
     {
       lua_pushstring(L, "no_internal_lookup");
-      lua_rawseti(L, -2, i++);
+      lua_rawseti(L, -2, ++i);
     }
     else if (mode & SSL_SESS_CACHE_NO_INTERNAL_STORE)
     {
       lua_pushstring(L, "no_internal_store");
-      lua_rawseti(L, -2, i++);
+      lua_rawseti(L, -2, ++i);
     }
   }
 
@@ -2145,12 +2146,10 @@ static int openssl_ssl_get(lua_State*L)
     }
     else if (strcmp(what, "cipher_list") == 0)
     {
-      //TODO FIX
       lua_pushstring(L, SSL_get_cipher_list(s, 0));
     }
     else if (strcmp(what, "verify_mode") == 0)
     {
-      //FIX
       lua_pushinteger(L, SSL_get_verify_mode(s));
     }
     else if (strcmp(what, "verify_depth") == 0)
@@ -2281,13 +2280,11 @@ static int openssl_ssl_set(lua_State*L)
     }
     else if (strcmp(what, "purpose") == 0)
     {
-      //FIX
       int purpose = luaL_checkint(L, i + 1);
       ret = SSL_set_purpose(s, purpose);
     }
     else if (strcmp(what, "trust") == 0)
     {
-      //FIX
       int trust = luaL_checkint(L, i + 1);
       ret = SSL_set_trust(s, trust);
     }
@@ -2566,15 +2563,23 @@ duplicate ssl object
 static int openssl_ssl_dup(lua_State*L)
 {
   SSL* s = CHECK_OBJECT(1, SSL, "openssl.ssl");
-  SSL* ss = SSL_dup(s);
-  if (ss)
+  BIO *rio = SSL_get_rbio(s);
+  BIO *wio = SSL_get_wbio(s);
+  if (rio != NULL || wio != NULL)
   {
-    PUSH_OBJECT(ss, "openssl.ssl");
-    openssl_newvalue(L, ss);
-  }
-  else
     lua_pushnil(L);
-  return 1;
+    lua_pushliteral(L, "invalid state: rbio or wbio already set");
+    return 2;
+  }
+
+  s = SSL_dup(s);
+  if (s)
+  {
+    PUSH_OBJECT(s, "openssl.ssl");
+    openssl_newvalue(L, s);
+    return 1;
+  }
+  return openssl_pushresult(L, 0);
 }
 
 /***

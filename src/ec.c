@@ -243,12 +243,13 @@ EC_GROUP* openssl_get_ec_group(lua_State* L, int ec_name_idx, int param_enc_idx,
     if (param_enc_idx)
     {
       int form = 0;
-      if (lua_isstring(L, param_enc_idx))
+      int type = lua_type(L, param_enc_idx);
+      if (type == LUA_TSTRING)
       {
         form = openssl_to_point_conversion_form(L, param_enc_idx, NULL);
         EC_GROUP_set_point_conversion_form(g, form);
       }
-      else if (lua_isnumber(L, param_enc_idx))
+      else if (type == LUA_TNUMBER)
       {
         form = luaL_checkint(L, param_enc_idx);
         EC_GROUP_set_point_conversion_form(g, form);
@@ -266,12 +267,13 @@ EC_GROUP* openssl_get_ec_group(lua_State* L, int ec_name_idx, int param_enc_idx,
     if (conv_form_idx)
     {
       int asn1_flag = 0;
-      if (lua_isstring(L, conv_form_idx))
+      int type = lua_type(L, conv_form_idx);
+      if (type == LUA_TSTRING)
       {
         asn1_flag =  openssl_to_group_asn1_flag(L, conv_form_idx, NULL);
         EC_GROUP_set_asn1_flag(g, asn1_flag);
       }
-      else if (lua_isnumber(L, conv_form_idx))
+      else if (type == LUA_TNUMBER)
       {
         asn1_flag = luaL_checkint(L, conv_form_idx);
         EC_GROUP_set_asn1_flag(g, asn1_flag);
@@ -519,7 +521,6 @@ static int openssl_ecdsa_do_verify(lua_State*L)
     ECDSA_SIG* sig = d2i_ECDSA_SIG(NULL, (const unsigned char**)&s, sigl);
     ret = ECDSA_do_verify((const unsigned char*)dgst, l, sig, ec);
     ECDSA_SIG_free(sig);
-    ret = openssl_pushboolean(L, ret);
   }
   else
   {
@@ -529,9 +530,9 @@ static int openssl_ecdsa_do_verify(lua_State*L)
     ECDSA_SIG_set0(sig, r, s);
     ret = ECDSA_do_verify((const unsigned char*)dgst, l, sig, ec);
     ECDSA_SIG_free(sig);
-    ret = openssl_pushboolean(L, ret);
   }
-  return ret;
+  lua_pushboolean(L, ret);
+  return 1;
 }
 
 #define SM2_SIG_MAX_LEN 72
@@ -585,7 +586,8 @@ static LUA_FUNCTION(openssl_ecdsa_verify)
   int type = EVP_MD_type(md);
 
   int ret = ECDSA_verify(type, dgst, (int)dgstlen, sig, (int)siglen, eckey);
-  return openssl_pushboolean(L, ret);
+  lua_pushboolean(L, ret);
+  return 1;
 }
 
 /* ec_point */

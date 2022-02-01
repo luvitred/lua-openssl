@@ -100,7 +100,7 @@ static int openssl_cms_read(lua_State *L)
   {
     PUSH_OBJECT(cms, "openssl.cms");
     if(data!=NULL)
-      PUSH_OBJECT(data, "openssl.bn");
+      PUSH_OBJECT(data, "openssl.bio");
     return data!=NULL? 2 : 1;
   }
   return openssl_pushresult(L, 0);
@@ -219,8 +219,10 @@ static int openssl_cms_compress(lua_State *L)
   CMS_ContentInfo *cms;
   nid = lua_isnoneornil(L, 2) ? -1 : luaL_checkoption(L, 2, "zlib", compress_options);
   flags = luaL_optint(L, 3, 0);
+  if (nid != -1)
+    nid = openssl_compress_nid[nid];
 
-  cms = CMS_compress(in, nid==-1 ? nid : openssl_compress_nid[nid], flags);
+  cms = CMS_compress(in, nid, flags);
   BIO_free(in);
 
   if (cms)
@@ -779,6 +781,8 @@ static int openssl_cms_final(lua_State*L)
   return openssl_pushresult(L, ret);
 }
 
+/*
+ * FIXME: fix and enable this
 static int openssl_cms_sign_receipt(lua_State*L)
 {
   CMS_ContentInfo *cms = CHECK_OBJECT(1, CMS_ContentInfo, "openssl.cms");
@@ -815,6 +819,7 @@ static int openssl_cms_verify_receipt(lua_State*L)
   lua_pushboolean(L, ret>0);
   return 1;
 }
+*/
 
 static int openssl_cms_free(lua_State *L)
 {
@@ -839,8 +844,10 @@ static luaL_Reg cms_ctx_funs[] =
 
   {"signers",       openssl_cms_get_signers},
 
+/*
   {"sign_receipt",  openssl_cms_sign_receipt},
   {"verify_receipt",openssl_cms_verify_receipt},
+*/
 
   {"final",         openssl_cms_final},
 

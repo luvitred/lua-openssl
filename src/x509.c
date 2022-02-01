@@ -1238,7 +1238,7 @@ static int openssl_x509_extensions(lua_State* L)
 #else
     int i;
     int n = sk_X509_EXTENSION_num(exts);
-    for (i = 0; i < n; i++)
+    for (i = n - 1; i >= 0; i--)
       sk_X509_EXTENSION_delete(exts, i);
     n = sk_X509_EXTENSION_num(others);
     for (i = 0; i < n; i++)
@@ -1493,7 +1493,7 @@ static LuaL_Enumeration x509_vry_result[] =
   DEFINE_ENUM(UNSUPPORTED_CONSTRAINT_SYNTAX),
   DEFINE_ENUM(UNSUPPORTED_NAME_SYNTAX),
   DEFINE_ENUM(CRL_PATH_VALIDATION_ERROR),
-#if OPENSSL_VERSION_NUMBER > 0x10101000L
+#if OPENSSL_VERSION_NUMBER > 0x10101000L && !defined(LIBRESSL_VERSION_NUMBER)
   DEFINE_ENUM(PATH_LOOP),
   DEFINE_ENUM(SUITE_B_INVALID_VERSION),
   DEFINE_ENUM(SUITE_B_INVALID_ALGORITHM),

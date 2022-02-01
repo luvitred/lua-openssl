@@ -47,12 +47,16 @@ function TestOCSP:testAll()
 
   local der = oreq:export(false)
   assert(type(der)=='string')
-  oreq = ocsp.request_read(der, false)
-  assert(oreq)
-  assert(oreq:sign(self.bob.cert, self.bob.key, nil, 0, 'sha256'))
-  -- FIXME:
-  -- memleak bugs, can't suppressed when asan
-  -- assert(oreq:sign(self.bob.cert, self.bob.key, {self.bob.cert, self.ca.cert}, 0, 'sha256'))
+
+  -- avoid resign a ocsp request object, or memleaks
+  oreq = assert(ocsp.request_read(der, false))
+  assert(oreq:sign(self.bob.cert, self.bob.key))
+  oreq = assert(ocsp.request_read(der, false))
+  assert(oreq:sign(self.bob.cert, self.bob.key, {self.ca.cert}))
+  oreq = assert(ocsp.request_read(der, false))
+  assert(oreq:sign(self.bob.cert, self.bob.key, {self.ca.cert}, 0))
+  oreq = assert(ocsp.request_read(der, false))
+  assert(oreq:sign(self.bob.cert, self.bob.key, { self.ca.cert}, 0, 'sha256'))
   der = oreq:export(true)
   assert(type(der)=='string')
 
@@ -65,11 +69,18 @@ function TestOCSP:testAll()
 
   local ocert, okey = helper.sign(self.ocspdn)
 
+  local sn1 = tostring(self.bob.cert:serial())
+  local sn2 = tostring(self.alice.cert:serial())
   local resp = ocsp.response_new(oreq, self.ca.cacert, ocert, okey, {
-      [tostring(self.bob.cert:serial())] = {
+      [sn1] = {
         reovked = true,
         revoked_time = os.time(),
         reason = 0
+      },
+      [sn1] = {
+        reovked = true,
+        revoked_time = os.time(),
+        reason = 'AACompromise'
       }
   })
   assert(resp)
@@ -78,7 +89,8 @@ function TestOCSP:testAll()
 
   assert(resp:export(true))
   assert(resp:export(false))
-  -- FIXME
+
+  -- FIXME: do it
   -- local t= resp:parse()
   -- assert(type(t)=='table')
 end
