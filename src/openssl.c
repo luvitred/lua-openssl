@@ -183,9 +183,9 @@ static LUA_FUNCTION(openssl_error_string)
 
   val = (unsigned long)luaL_optinteger(L, 1, val);
 
+  lua_pushinteger(L, val);
   lua_pushstring (L, ERR_reason_error_string(val));
   lua_pushstring (L, ERR_lib_error_string   (val));
-  lua_pushinteger(L, val);
 
 #if (OPENSSL_VERSION_NUMBER < 0x30000000L)
   lua_pushstring (L, ERR_func_error_string  (val));
