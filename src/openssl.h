@@ -123,26 +123,28 @@ LUA_FUNCTION(luaopen_cipher);
 LUA_FUNCTION(luaopen_bn);
 LUA_FUNCTION(luaopen_pkey);
 LUA_FUNCTION(luaopen_x509);
-LUA_FUNCTION(luaopen_pkcs7);
-LUA_FUNCTION(luaopen_pkcs12);
 LUA_FUNCTION(luaopen_bio);
 LUA_FUNCTION(luaopen_asn1);
-
-LUA_FUNCTION(luaopen_ts);
 LUA_FUNCTION(luaopen_x509_req);
 LUA_FUNCTION(luaopen_x509_crl);
-LUA_FUNCTION(luaopen_ocsp);
-LUA_FUNCTION(luaopen_cms);
 LUA_FUNCTION(luaopen_ssl);
 LUA_FUNCTION(luaopen_ec);
 LUA_FUNCTION(luaopen_rsa);
 LUA_FUNCTION(luaopen_dsa);
 LUA_FUNCTION(luaopen_dh);
+
+#ifndef LUA_OPENSSL_TINY
+LUA_FUNCTION(luaopen_pkcs7);
+LUA_FUNCTION(luaopen_pkcs12);
+LUA_FUNCTION(luaopen_ts);
+LUA_FUNCTION(luaopen_ocsp);
+LUA_FUNCTION(luaopen_cms);
 #if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
 LUA_FUNCTION(luaopen_mac);
 LUA_FUNCTION(luaopen_param);
 #endif
 LUA_FUNCTION(luaopen_kdf);
+#endif
 
 void openssl_add_method_or_alias(const OBJ_NAME *name, void *arg) ;
 void openssl_add_method(const OBJ_NAME *name, void *arg);
